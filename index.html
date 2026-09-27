@@ -5308,16 +5308,43 @@ tbody tr:hover td { background: rgba(255,255,255,0.02); }
 </div>
 
 <div class="modal-veil" id="sigModal">
-  <div class="modal-box">
+  <div class="modal-box sig-box">
     <h4>חתימה</h4>
-    <canvas id="sigCanvas" width="380" height="150"></canvas>
+    <div class="sig-tabs"><button id="sigTabBtn-draw" class="on" onclick="PDFED.sigTab('draw')">✍️ ציור</button><button id="sigTabBtn-upload" onclick="PDFED.sigTab('upload')">📷 העלאת חתימה</button><button id="sigTabBtn-saved" onclick="PDFED.sigTab('saved')">⭐ שמורות</button></div>
+    <div id="sigPane-draw"><canvas id="sigCanvas" width="380" height="150"></canvas><div class="sig-hint">צייר עם האצבע, העט או העכבר</div></div>
+    <div id="sigPane-upload" style="display:none"><label class="sig-drop">📷 צלם או בחר תמונה של החתימה שלך<small>על דף לבן — הרקע יוסר אוטומטית</small><input type="file" accept="image/*" onchange="PDFED.handleSigUpload(this)"></label><div id="sigUploadPreview" class="sig-prev"></div></div>
+    <div id="sigPane-saved" style="display:none"><div id="sigSavedList" class="sig-saved-list"></div></div>
+    <label class="sig-keep"><input type="checkbox" id="sigKeep" checked> שמור לשימוש חוזר</label>
     <div class="modal-actions">
       <button onclick="PDFED.clearSig()">נקה</button>
-      <button class="primary" onclick="PDFED.saveSig()">שמור והצב</button>
+      <button class="primary" onclick="PDFED.saveSig()">השתמש בחתימה</button>
       <button onclick="PDFED.closeSigPad()">סגור</button>
     </div>
   </div>
 </div>
+<style id="pdfed-v2-css">
+body:not(:has(#page-pdfeditor.active)) #pdfedAnnBar{display:none!important}
+#pdfedAnnBar{position:fixed;z-index:900;display:none;transform:translateX(-50%);gap:4px;padding:5px;background:#1B3A3D;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+#pdfedAnnBar button{font-family:inherit;font-size:12.5px;font-weight:700;color:#fff;background:transparent;border:none;border-radius:7px;padding:8px 11px;cursor:pointer;white-space:nowrap}
+#pdfedAnnBar button:hover,#pdfedAnnBar button:active{background:rgba(255,255,255,.14)}
+#pdfedAnnBar button.del{color:#ffb4a8}
+#sigModal .sig-box{max-width:440px}
+#sigModal .sig-tabs{display:flex;gap:4px;margin:0 0 10px;background:rgba(0,0,0,.05);padding:4px;border-radius:9px}
+#sigModal .sig-tabs button{flex:1;font-family:inherit;font-size:12px;font-weight:700;padding:8px 6px;border:none;border-radius:7px;background:transparent;cursor:pointer;color:#555}
+#sigModal .sig-tabs button.on{background:#fff;color:#1B3A3D;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+#sigModal #sigCanvas{touch-action:none;width:100%;max-width:380px;background:#fff;border:1.5px dashed #bbb;border-radius:8px}
+#sigModal .sig-hint{font-size:11px;color:#888;text-align:center;margin-top:4px}
+#sigModal .sig-drop{display:flex;flex-direction:column;align-items:center;gap:4px;padding:22px 12px;border:2px dashed #C9A84C;border-radius:10px;cursor:pointer;font-weight:700;font-size:13px;color:#1B3A3D;text-align:center}
+#sigModal .sig-drop small{font-weight:500;color:#888;font-size:11px}#sigModal .sig-drop input{display:none}
+#sigModal .sig-prev{margin-top:10px;min-height:10px;text-align:center;background:repeating-conic-gradient(#eee 0% 25%,#fff 0% 50%) 50%/16px 16px;border-radius:8px}
+#sigModal .sig-prev img{max-width:100%;max-height:120px;display:inline-block;padding:6px}
+#sigModal .sig-saved-list{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#sigModal .sig-saved{position:relative;border:1.5px solid #ddd;border-radius:8px;padding:8px;background:#fff;cursor:pointer;text-align:center}
+#sigModal .sig-saved:hover{border-color:#C9A84C}#sigModal .sig-saved img{max-width:100%;max-height:64px}
+#sigModal .sig-saved button{position:absolute;top:3px;left:3px;border:none;background:#f3f3f3;border-radius:5px;font-size:11px;cursor:pointer;padding:2px 6px}
+#sigModal .sig-empty{grid-column:1/-1;font-size:12px;color:#888;text-align:center;padding:16px}
+#sigModal .sig-keep{display:flex;align-items:center;gap:6px;font-size:12px;margin:10px 0 0;color:#555}
+</style>
 
 <div class="modal-veil" id="tableModal">
   <div class="modal-box">
@@ -10915,10 +10942,10 @@ function drPipelineStrip(allData) {
     : `📍 שלב נוכחי בתכנון: <span style="color:var(--accent);">${escHtmlSafe(current.name)}</span> · ${current.approved}/${current.total} פריטים אושרו (${current.pct}%)`;
 
   const segsHtml = segs.map((s, i) => {
-    const cls = i === currentIdx ? 'current' : (s.pct >= 100 ? 'done' : '');
-    const hereTag = i === currentIdx && !allDone ? `<span class="dr-pipeline-here">כאן</span>` : '';
+    const cls = (i === currentIdx ? 'current' : (s.pct >= 100 ? 'done' : '')) + (s.code === drState.stageCode ? ' viewing' : '');
+    const hereTag = i === currentIdx && !allDone ? `<span class="dr-pipeline-here">שלב נוכחי</span>` : '';
     const doneTag = s.pct >= 100 ? ' ✓' : '';
-    return `<div class="dr-pipeline-seg ${cls}" onclick="drSetStage('${s.code}')" title="${escHtmlSafe(s.name)}">
+    return `<div class="dr-pipeline-seg ${cls}" data-code="${s.code}" onclick="drSetStage('${s.code}')" title="${escHtmlSafe(s.name)}">
       ${hereTag}
       <div class="dr-pipeline-name">${escHtmlSafe(s.short)}${doneTag}</div>
       <div class="dr-pipeline-pct">${s.approved}/${s.total} · ${s.pct}%</div>
@@ -41363,6 +41390,28 @@ table.ccf-sum input{width:100%;background:transparent;border:none;color:#13302F;
 .drm-stag { flex-shrink:0; padding:3px 9px; border-radius:5px; font-size:9.5px; font-weight:700; cursor:pointer; border:1.5px solid var(--border2,#ccc); min-width:44px; text-align:center; }
 .drm-stag[data-s="half"] { background:var(--accent-glow,rgba(201,168,76,.15)); color:var(--accent,#c9a84c); border-color:var(--accent,#c9a84c); }
 .drm-stag[data-s="done"] { background:rgba(63,185,80,.15); color:#3fb950; border-color:#3fb950; }
+/* v2 — אחידות מלאה עם תצוגת PDR */
+.drm-subtabs { margin:12px 16px 0; }
+.drm-panel { border:none !important; padding:0 !important; }
+.drm-tree { padding:0 16px 24px; }
+.drm-discgroup.dr-section { margin-top:12px; border-radius:8px; margin-bottom:0; }
+.drm-discgroup .dr-section-header { gap:0; }
+.drm-discgroup.open .dr-section-toggle { transform:rotate(-90deg); }
+.drm-minibar { width:70px; height:5px; border-radius:3px; background:var(--surface3); overflow:hidden; margin:0 8px; flex-shrink:0; }
+.drm-minibar i { display:block; height:100%; background:var(--green); }
+.drm-sub { background:var(--bg2); border-top:1px solid var(--border); gap:0; }
+.drm-sub .dr-sub-num { min-width:52px; }
+.drm-item { grid-template-columns:auto 1fr 96px !important; padding-right:38px !important; }
+.drm-item .drm-stag, .drm-sub .drm-stag { font-size:11px; padding:5px 10px; font-weight:700; background:var(--surface); color:var(--text2); }
+.drm-sub .drm-stag { margin-right:8px; min-width:74px; }
+.drm-item.s-approved .drm-stag { background:rgba(63,185,80,.15); color:var(--green); border-color:rgba(63,185,80,.5); }
+.drm-sub .drm-stag[data-s="done"] { background:rgba(63,185,80,.15); color:var(--green); border-color:rgba(63,185,80,.5); }
+/* צינור שלבים: "מוצג כעת" ברור מול "שלב נוכחי" */
+.dr-pipeline-seg.current { box-shadow:none; background:var(--surface); border-color:var(--accent); border-style:dashed; }
+.dr-pipeline-seg.viewing { border:2px solid var(--text) !important; border-style:solid !important; background:var(--accent-glow) !important; box-shadow:0 0 0 3px rgba(201,168,76,.35), 0 4px 12px rgba(0,0,0,.12) !important; transform:translateY(-2px); }
+.dr-pipeline-seg.viewing::after { content:'מוצג כעת'; position:absolute; bottom:-8px; left:50%; transform:translateX(-50%); background:var(--text); color:var(--surface); font-size:8.5px; font-weight:800; padding:1px 7px; border-radius:4px; white-space:nowrap; }
+.dr-pipeline { padding-bottom:16px; }
+.dr-pipeline-here { font-size:8.5px; padding:1px 6px; }
 </style>
 <script id="drm-js">
 (function(){
@@ -41699,39 +41748,74 @@ table.ccf-sum input{width:100%;background:transparent;border:none;color:#13302F;
     drmUpdateCounters();
   };
 
+  var drmF = { q:'', st:'' };
+  function drmMatch(r, st){ if (drmF.st && st !== drmF.st) return false; if (drmF.q && String(r.text).indexOf(drmF.q) < 0) return false; return true; }
   function drmRenderDisc(sk, di){
     var stageCode = sk==='c' ? 'concept' : 'sd';
     var data = drmData();
     var d = (sk==='c'?CONCEPT:SD)[di];
-    var key = sk+di, isOpen = !!discOpen[key];
-    var done = 0;
+    var key = sk+di;
+    var filtering = !!(drmF.q || drmF.st);
+    var done = 0, shown = 0;
+    d.rows.forEach(function(r){ if (drmRowStatus(stageCode, r.num, data) === 'done') done++; });
     var hideUntil = null;
     var rowsHtml = d.rows.map(function(r, ri){
-      if (hideUntil !== null){ if (r.depth > hideUntil) return ''; hideUntil = null; }
-      var subKey = sk+di+'_'+ri, subIsOpen = subOpen[subKey] !== false;
-      if (r.hasChild && !subIsOpen) hideUntil = r.depth;
       var st = drmRowStatus(stageCode, r.num, data);
-      if (st === 'done') done++;
-      var toggleHtml = r.hasChild ? '<div class="drm-subtoggle" onclick="drmToggleSub(\''+sk+'\','+di+','+ri+',event)">'+(subIsOpen?'▾':'◂')+'</div>' : '';
-      var lbl = st==='done' ? '✓' : 'טרם';
-      return '<div class="drm-row depth'+r.depth+'">'+toggleHtml+'<span class="txt">'+r.text+'</span><div class="drm-stag" data-s="'+st+'" onclick="drmCycleRow(\''+sk+'\','+di+','+ri+',event)">'+lbl+'</div></div>';
+      if (filtering){
+        if (r.hasChild) return '';
+        if (!drmMatch(r, st)) return '';
+        shown++;
+      } else {
+        if (hideUntil !== null){ if (r.depth > hideUntil) return ''; hideUntil = null; }
+        var subKey = sk+di+'_'+ri, subIsOpen = subOpen[subKey] !== false;
+        if (r.hasChild && !subIsOpen) hideUntil = r.depth;
+        if (r.hasChild){
+          return '<div class="dr-sub-header drm-sub" onclick="drmToggleSub(\''+sk+'\','+di+','+ri+',event)"><span class="dr-sub-toggle"'+(subIsOpen?' style="transform:rotate(-90deg)"':'')+'>◂</span><span class="dr-sub-num">'+r.num+'</span><span class="dr-sub-title">'+r.text+'</span>'
+            + '<div class="drm-stag" data-s="'+st+'" onclick="drmCycleRow(\''+sk+'\','+di+','+ri+',event)" title="סמן את כל הסעיפים שתחת הכותרת">'+(st==='done'?'✓ הכל אושר':'אשר הכל')+'</div></div>';
+        }
+      }
+      return '<div class="dr-item drm-item '+(st==='done'?'s-approved':'')+'"><span class="dr-item-num">'+r.num+'</span><span class="dr-item-text">'+r.text+'</span>'
+        + '<div class="drm-stag" data-s="'+st+'" onclick="drmCycleRow(\''+sk+'\','+di+','+ri+',event)">'+(st==='done'?'✓ אושר':'ממתין')+'</div></div>';
     }).join('');
     var el = document.getElementById('drm-disc-'+key);
     if (!el) return;
-    el.innerHTML = '<div class="drm-dischead" onclick="drmToggleDisc(\''+sk+'\','+di+')"><span>'+d.disc+'</span><span>'+done+'/'+d.rows.length+' '+(isOpen?'▲':'▾')+'</span></div><div class="drm-discbody'+(isOpen?' open':'')+'">'+rowsHtml+'</div>';
+    var isOpen = filtering ? shown>0 : !!discOpen[key];
+    el.style.display = (filtering && !shown) ? 'none' : '';
+    el.className = 'drm-discgroup dr-section' + (isOpen ? ' open' : '');
+    var pct = d.rows.length ? Math.round(done/d.rows.length*100) : 0;
+    el.innerHTML = '<div class="dr-section-header" onclick="drmToggleDisc(\''+sk+'\','+di+')"><span class="dr-section-toggle">◂</span><span class="dr-section-num">'+(di+1)+'</span><span class="dr-section-title">'+d.disc+'</span>'
+      + '<span class="drm-minibar"><i style="width:'+pct+'%"></i></span><span class="dr-section-stat">'+done+'/'+d.rows.length+' אושרו'+(filtering?' · '+shown+' תואמים':'')+'</span></div>'
+      + '<div class="dr-section-body">'+rowsHtml+'</div>';
+  }
+
+  function drmStats(sk){
+    var stageCode = sk==='c' ? 'concept' : 'sd', data = drmData(), list = sk==='c'?CONCEPT:SD, tot=0, ok=0;
+    list.forEach(function(d){ d.rows.forEach(function(r){ tot++; if (drmRowStatus(stageCode, r.num, data)==='done') ok++; }); });
+    var el = document.getElementById('drm-stats'); if (!el) return;
+    var pct = tot ? Math.round(ok/tot*100) : 0;
+    el.innerHTML = '<div class="dr-stat-card"><div class="dr-stat-num">'+tot+'</div><div class="dr-stat-lbl">סה״כ פריטים</div></div>'
+      + '<div class="dr-stat-card"><div class="dr-stat-num green">'+ok+'</div><div class="dr-stat-lbl">✅ אושרו</div><div class="dr-progress"><div class="dr-progress-fill" style="width:'+pct+'%"></div></div></div>'
+      + '<div class="dr-stat-card"><div class="dr-stat-num orange">'+(tot-ok)+'</div><div class="dr-stat-lbl">⏳ ממתינים</div></div>'
+      + '<div class="dr-stat-card"><div class="dr-stat-num accent">'+pct+'%</div><div class="dr-stat-lbl">התקדמות השלב</div></div>';
   }
 
   function drmRenderAll(sk){
     var data = sk==='c'?CONCEPT:SD;
     var panel = document.getElementById('drm-panel-'+sk);
     if (!panel) return;
-    panel.innerHTML = data.map(function(d,i){ return '<div class="drm-discgroup" id="drm-disc-'+sk+i+'"></div>'; }).join('');
+    panel.innerHTML = '<div class="dr-tree drm-tree">' + data.map(function(d,i){ return '<div class="drm-discgroup dr-section" id="drm-disc-'+sk+i+'"></div>'; }).join('') + '</div>';
     data.forEach(function(d,i){ drmRenderDisc(sk, i); });
   }
+  function drmActive(){ return (typeof drState!=='undefined' && drState.stageCode==='sd') ? 's' : 'c'; }
+  window.drmFilter = function(k, v){ drmF[k] = v; drmRenderAll(drmActive()); };
+  window.drmOpenAll = function(open){ var sk=drmActive(); (sk==='c'?CONCEPT:SD).forEach(function(d,i){ discOpen[sk+i]=!!open; }); drmRenderAll(sk); };
 
   window.drmSwitchView = function(v){
+    try { if (typeof drState!=='undefined') drState.stageCode = (v==='s') ? 'sd' : 'concept'; } catch(e){}
     document.querySelectorAll('.drm-subtab').forEach(function(t,i){ t.classList.toggle('active', (i===0)===(v==='c')); });
     document.querySelectorAll('.drm-panel').forEach(function(p,i){ p.classList.toggle('active', (i===0)===(v==='c')); });
+    document.querySelectorAll('.dr-pipeline-seg').forEach(function(seg){ var c=seg.getAttribute('data-code'); if (c==='concept'||c==='sd') seg.classList.toggle('viewing', c===(v==='s'?'sd':'concept')); });
+    drmStats(v);
   };
 
   function drmUpdateCounters(){
@@ -41741,6 +41825,7 @@ table.ccf-sum input{width:100%;background:transparent;border:none;color:#13302F;
     SD.forEach(function(d){ d.rows.forEach(function(r){ if (drmRowStatus('sd', r.num, data)==='done') sDone++; }); });
     var el = document.getElementById('drm-counter');
     if (el) el.textContent = 'רעיוני '+cDone+'/68 · תכנון מוקדם '+sDone+'/174';
+    drmStats(drmActive());
   }
 
   var origDrRender = window.drRender;
@@ -41769,14 +41854,16 @@ table.ccf-sum input{width:100%;background:transparent;border:none;color:#13302F;
             + '<div class="drm-subtab active" onclick="drmSwitchView(\'c\')">1️⃣ רעיוני</div>'
             + '<div class="drm-subtab" onclick="drmSwitchView(\'s\')">2️⃣ תכנון מוקדם</div>'
             + '</div>'
-            + '<div class="drm-panel active" id="drm-panel-c" style="border:2px solid #000;border-radius:0 10px 10px 10px;padding:12px;"></div>'
-            + '<div class="drm-panel" id="drm-panel-s" style="border:2px solid #000;border-radius:0 10px 10px 10px;padding:12px;"></div>';
+            + '<div class="dr-stats" id="drm-stats"></div>'
+            + '<div class="dr-filters"><select onchange="drmFilter(\'st\',this.value)"><option value="">— כל הסטטוסים —</option><option value="empty">ממתין</option><option value="done">אושר</option></select><input type="search" placeholder="🔍 חיפוש בטקסט..." oninput="drmFilter(\'q\',this.value)"><div class="dr-quick-actions"><button class="btn btn-ghost btn-sm" onclick="drmOpenAll(1)">פתח הכל</button><button class="btn btn-ghost btn-sm" onclick="drmOpenAll(0)">סגור הכל</button></div></div>'
+            + '<div class="drm-panel active" id="drm-panel-c"></div>'
+            + '<div class="drm-panel" id="drm-panel-s"></div>';
           statsEl.parentNode.insertBefore(wrap, statsEl);
           statsEl.style.display = 'none';
           var sib = statsEl.nextElementSibling;
           while (sib){ var nxt = sib.nextElementSibling; if (sib.className && typeof sib.className==='string' && sib.className.indexOf('dr-')===0) sib.style.display='none'; sib = nxt; }
         }
-        drmRenderAll('c'); drmRenderAll('s'); drmUpdateCounters();
+        drmRenderAll('c'); drmRenderAll('s'); drmUpdateCounters(); drmSwitchView(drState.stageCode==='sd' ? 's' : 'c');
       }
     };
   }
@@ -42224,6 +42311,7 @@ function clearAllAnnotationsUI(){
 }
 
 function openTextEditModal(opts){
+  var _ab=document.getElementById('pdfedAnnBar'); if(_ab) _ab.style.display='none';
   TEXTEDIT = Object.assign({mode:'free', bold:false, italic:false, underline:false}, opts);
   $('textEditTitle').textContent = TEXTEDIT.mode==='smart' ? 'עריכת טקסט' : 'טקסט חופשי';
   $('textEditInput').value = TEXTEDIT.text || '';
@@ -42241,7 +42329,7 @@ function updateTextStyleButtons(){
   if($('textEditUnderlineBtn')) $('textEditUnderlineBtn').style.background = TEXTEDIT.underline ? on : off;
 }
 function toggleTextStyle(style){ TEXTEDIT[style] = !TEXTEDIT[style]; updateTextStyleButtons(); }
-function closeTextEditModal(){ $('textEditModal').style.display = 'none'; TEXTEDIT = {}; }
+function closeTextEditModal(){ $('textEditModal').style.display = 'none'; TEXTEDIT = {}; placeAnnBar(); }
 function confirmTextEdit(){
   var text = $('textEditInput').value;
   var font = $('textEditFont').value;
@@ -42255,7 +42343,12 @@ function confirmTextEdit(){
   if(mode==='smart' && foundRect){
     pageAnns().push({type:'whiteout', x:foundRect.x-1, y:foundRect.y-1, w:foundRect.w+3, h:foundRect.h+3});
   }
+  if(TEXTEDIT.editIdx!==undefined && TEXTEDIT.editIdx!==null && pageAnns()[TEXTEDIT.editIdx]){
+    var ea = pageAnns()[TEXTEDIT.editIdx]; ea.text=text; ea.color=color; ea.font=font; ea.size=size; ea.bold=bold; ea.italic=italic; ea.underline=underline;
+    STATE.selected = TEXTEDIT.editIdx; setTool(null); redrawAnnotations(); showToast('✏️ הטקסט עודכן'); TEXTEDIT = {}; return;
+  }
   pageAnns().push({type:'text', x:ex, y:ey, text:text, color:color, font:font, size:size, bold:bold, italic:italic, underline:underline});
+  if(mode!=='smart'){ STATE.selected = pageAnns().length-1; setTool(null); }
   redrawAnnotations();
   showToast(mode==='smart' ? '✏️ הטקסט הוחלף' : '✏️ טקסט נוסף');
   TEXTEDIT = {};
@@ -42320,9 +42413,10 @@ function annBounds(a){
     return {x:Math.min.apply(null,xs)-6, y:Math.min.apply(null,ys)-6, w:Math.max.apply(null,xs)-Math.min.apply(null,xs)+12, h:Math.max.apply(null,ys)-Math.min.apply(null,ys)+12};
   }
   if(a.type==='text'){
-    var tmp=document.createElement('canvas').getContext('2d'); tmp.font=(a.size||16)+'px '+(a.font||'Arial');
+    var tmp=document.createElement('canvas').getContext('2d'); tmp.font=(a.italic?'italic ':'')+(a.bold?'700 ':'')+(a.size||16)+'px '+(a.font||'Arial');
     var tw=tmp.measureText(a.text).width;
-    return {x:a.x-2, y:a.y-2, w:tw+4, h:(a.size||16)*1.3};
+    /* הטקסט מצויר מימין לשמאל: נקודת העוגן היא הקצה הימני */
+    return {x:a.x-tw-6, y:a.y-6, w:tw+12, h:(a.size||16)*1.3+10};
   }
   return {x:a.x, y:a.y, w:a.w||20, h:a.h||20};
 }
@@ -42704,7 +42798,37 @@ function redrawAnnotations(){
   pageAnns().forEach(drawAnn);
   if(STATE.selected!==null && STATE.selected>=0) drawSelectionBox(STATE.selected);
   updatePropsPanel();
+  placeAnnBar();
 }
+/* ===== סרגל פעולות צף לאובייקט נבחר: ערוך · שכפל · לכל העמודים · מחק ===== */
+function placeAnnBar(){
+  var bar = document.getElementById('pdfedAnnBar');
+  if(!bar){ bar=document.createElement('div'); bar.id='pdfedAnnBar'; document.body.appendChild(bar);
+    window.addEventListener('scroll', function(){ placeAnnBar(); }, true); window.addEventListener('resize', function(){ placeAnnBar(); }); }
+  var pg = document.getElementById('page-pdfeditor');
+  var a = (STATE.selected!==null && STATE.selected>=0) ? pageAnns()[STATE.selected] : null;
+  var modalOpen = ['sigModal','textEditModal','tableModal'].some(function(id){ var m=document.getElementById(id); return m && m.style.display==='flex'; });
+  if(!a || !overlayCanvas || !pg || !pg.classList.contains('active') || movingSelection || resizingHandle || modalOpen){ bar.style.display='none'; return; }
+  var b = annBounds(a), r = overlayCanvas.getBoundingClientRect();
+  var top = r.top + b.y - 46; if(top < r.top + 4) top = r.top + b.y + b.h + 8;
+  var left = r.left + b.x + b.w/2;
+  bar.innerHTML = (a.type==='text' ? '<button onclick="PDFED.editSelected()">✏️ ערוך</button>' : '')
+    + '<button onclick="PDFED.duplicateSelected()">⧉ שכפל</button>'
+    + '<button onclick="PDFED.duplicateSelectedToAllPages()">📄 לכל העמודים</button>'
+    + '<button class="del" onclick="PDFED.deleteSelected()">🗑 מחק</button>';
+  bar.style.display='flex'; var bw = bar.offsetWidth||300; left = Math.min(window.innerWidth-bw/2-8, Math.max(bw/2+8, left)); bar.style.top = Math.max(8, top)+'px'; bar.style.left = left+'px';
+}
+function duplicateSelected(){
+  var anns = pageAnns(), a = (STATE.selected!==null && STATE.selected>=0) ? anns[STATE.selected] : null; if(!a) return;
+  snapshot();
+  var c = {}; for(var k in a){ if(k==='img') c.img=a.img; else if(k==='points') c.points=a.points.map(function(p){return {x:p.x,y:p.y};}); else c[k]= (a[k] && typeof a[k]==='object') ? JSON.parse(JSON.stringify(a[k])) : a[k]; }
+  moveAnn(c, 18, 18); anns.push(c); STATE.selected = anns.length-1; redrawAnnotations(); showToast('⧉ שוכפל — גרור למקום הרצוי');
+}
+function editTextAnn(idx){
+  var a = pageAnns()[idx]; if(!a || a.type!=='text') return;
+  openTextEditModal({mode:'free', x:a.x, y:a.y, text:a.text, color:a.color, font:a.font, size:a.size, bold:a.bold, italic:a.italic, underline:a.underline, editIdx:idx});
+}
+function editSelected(){ if(STATE.selected!==null && STATE.selected>=0) editTextAnn(STATE.selected); }
 function updatePropsPanel(){
   var grp = $('propsGroup'); if(!grp) return;
   var a = (STATE.selected!==null && STATE.selected>=0) ? pageAnns()[STATE.selected] : null;
@@ -42745,13 +42869,14 @@ function drawAnn(a){
     octx.fillStyle=a.color||'#1c2128';
     var fw = a.bold ? '700 ' : ''; var fs = a.italic ? 'italic ' : '';
     octx.font = fs+fw+(a.size||16)+'px '+(a.font||'Arial');
-    octx.textBaseline='top';
+    octx.textBaseline='top'; octx.direction='rtl'; octx.textAlign='right';
     octx.fillText(a.text,a.x,a.y);
     if(a.underline){
       var w = octx.measureText(a.text).width;
       octx.strokeStyle = a.color||'#1c2128'; octx.lineWidth = Math.max(1, (a.size||16)*0.06);
-      octx.beginPath(); octx.moveTo(a.x, a.y+(a.size||16)*1.05); octx.lineTo(a.x+w, a.y+(a.size||16)*1.05); octx.stroke();
+      octx.beginPath(); octx.moveTo(a.x-w, a.y+(a.size||16)*1.05); octx.lineTo(a.x, a.y+(a.size||16)*1.05); octx.stroke();
     }
+    octx.direction='inherit'; octx.textAlign='start';
   }
   else if(a.type==='table'){ drawTable(octx, a); }
   else if(a.type==='line'){ octx.strokeStyle=a.color||'#a8492f'; octx.lineWidth=a.lw||2.5; octx.beginPath(); octx.moveTo(a.x1,a.y1); octx.lineTo(a.x2,a.y2); octx.stroke(); }
@@ -42778,10 +42903,18 @@ function hitTestHandle(pt){
   return null;
 }
 function setupOverlayEvents(){
-  overlayCanvas.addEventListener('mousedown', function(ev){
+  overlayCanvas.style.touchAction = 'none';
+  var lastTap = {t:0, idx:-1};
+  overlayCanvas.addEventListener('pointerdown', function(ev){
+    try{ overlayCanvas.setPointerCapture(ev.pointerId); }catch(e){}
     var r=overlayCanvas.getBoundingClientRect();
     var pt = {x:ev.clientX-r.left, y:ev.clientY-r.top};
+    /* לחיצה על טקסט/חתימה קיימים כשכלי טקסט/חתימה פעיל → בחירה והזזה במקום יצירה חדשה */
+    if(STATE.tool==='text' || STATE.tool==='sign'){ var hi0 = hitTest(pt.x, pt.y); if(hi0>=0 && !hitTestHandle(pt)) setTool(null); }
     if(!STATE.tool){
+      var hiDbl = hitTest(pt.x, pt.y), now = Date.now();
+      if(hiDbl>=0 && hiDbl===lastTap.idx && now-lastTap.t<400){ var aa = pageAnns()[hiDbl]; if(aa && aa.type==='text'){ lastTap={t:0,idx:-1}; editTextAnn(hiDbl); return; } }
+      lastTap = {t:now, idx:hiDbl};
       var handle = hitTestHandle(pt);
       if(handle){ resizingHandle = handle; moveOrigin = pt; snapshot(); return; }
       var idx = hitTest(pt.x, pt.y);
@@ -42809,7 +42942,7 @@ function setupOverlayEvents(){
       smartEditAt(clickPt);
     }
   });
-  overlayCanvas.addEventListener('mousemove', function(ev){
+  overlayCanvas.addEventListener('pointermove', function(ev){
     var r=overlayCanvas.getBoundingClientRect();
     var pt = {x:ev.clientX-r.left, y:ev.clientY-r.top};
     if(resizingHandle && STATE.selected!==null){
@@ -42843,14 +42976,21 @@ function setupOverlayEvents(){
     else if(STATE.tool==='sign' && STATE.sigImg){ octx.drawImage(STATE.sigImg, dragStart.x, dragStart.y, Math.max(w,40), Math.max(h,20)); }
     octx.globalAlpha = 1;
   });
-  overlayCanvas.addEventListener('mouseup', function(ev){
-    if(resizingHandle){ resizingHandle=null; moveOrigin=null; return; }
-    if(movingSelection){ movingSelection=false; moveOrigin=null; return; }
+  overlayCanvas.addEventListener('pointercancel', function(){ resizingHandle=null; movingSelection=false; moveOrigin=null; dragStart=null; dragCurrent=null; penPoints=null; redrawAnnotations(); });
+  overlayCanvas.addEventListener('pointerup', function(ev){
+    if(resizingHandle){ resizingHandle=null; moveOrigin=null; placeAnnBar(); return; }
+    if(movingSelection){ movingSelection=false; moveOrigin=null; placeAnnBar(); return; }
     if(!dragStart) return;
     var r=overlayCanvas.getBoundingClientRect();
     var end = {x:ev.clientX-r.left, y:ev.clientY-r.top};
     var w=end.x-dragStart.x, h=end.y-dragStart.y;
     var op=STATE.opacity, lw=STATE.lineWidth;
+    /* חתימה בהקשה אחת (בלי גרירה) — מוצבת בגודל ברירת מחדל לפי יחס התמונה */
+    if(STATE.tool==='sign' && STATE.sigImg && Math.abs(w)<=4 && Math.abs(h)<=4){
+      var sw=170, sh=Math.round(170*(STATE.sigImg.naturalHeight||60)/(STATE.sigImg.naturalWidth||170));
+      snapshot(); pageAnns().push({type:'sign', x:dragStart.x-sw/2, y:dragStart.y-sh/2, w:sw, h:sh, img:STATE.sigImg, opacity:op});
+      STATE.selected = pageAnns().length-1; setTool(null); dragStart=null; redrawAnnotations(); showToast('✍️ החתימה הוצבה — אפשר לגרור ולשנות גודל'); return;
+    }
     if(STATE.tool==='pen' && penPoints && penPoints.length>1){
       snapshot(); pageAnns().push({type:'pen', points:penPoints, color:$('colorPicker').value, lw:lw, opacity:op});
     } else if(Math.abs(w)>4 && Math.abs(h)>4 || ((STATE.tool==='line'||STATE.tool==='arrow') && (Math.abs(w)>4||Math.abs(h)>4))){
@@ -42896,21 +43036,43 @@ function resizeAnn(a, handle, dx, dy){
 }
 
 /* ===== Signature pad ===== */
-function openSigPad(){ $('sigModal').style.display='flex'; var c=$('sigCanvas'); var sctx=c.getContext('2d'); sctx.clearRect(0,0,c.width,c.height); sctx.lineWidth=2.5; sctx.strokeStyle='#1c2128'; sctx.lineCap='round';
+function openSigPad(){ var _ab=document.getElementById('pdfedAnnBar'); if(_ab) _ab.style.display='none'; $('sigModal').style.display='flex'; var c=$('sigCanvas'); var sctx=c.getContext('2d'); sctx.clearRect(0,0,c.width,c.height); sctx.lineWidth=2.5; sctx.strokeStyle='#1c2128'; sctx.lineCap='round';
   var drawing=false, last=null;
-  c.onmousedown=function(e){drawing=true; var r=c.getBoundingClientRect(); last={x:e.clientX-r.left,y:e.clientY-r.top};};
-  c.onmousemove=function(e){ if(!drawing) return; var r=c.getBoundingClientRect(); var p={x:e.clientX-r.left,y:e.clientY-r.top}; sctx.beginPath(); sctx.moveTo(last.x,last.y); sctx.lineTo(p.x,p.y); sctx.stroke(); last=p; };
-  window.addEventListener('mouseup', function(){drawing=false;});
+  c.style.touchAction='none';
+  var sx=function(e){ var r=c.getBoundingClientRect(); return {x:(e.clientX-r.left)*c.width/r.width, y:(e.clientY-r.top)*c.height/r.height}; };
+  c.onpointerdown=function(e){ drawing=true; try{c.setPointerCapture(e.pointerId);}catch(x){} last=sx(e); };
+  c.onpointermove=function(e){ if(!drawing) return; var p=sx(e); sctx.beginPath(); sctx.moveTo(last.x,last.y); sctx.lineTo(p.x,p.y); sctx.stroke(); last=p; };
+  c.onpointerup=c.onpointercancel=function(){ drawing=false; };
+  sigTab('draw'); renderSavedSigs();
 }
+/* חתימות שמורות לשימוש חוזר (נשמרות בדפדפן, נכללות בגיבוי המערכת) */
+var SIG_KEY='miflas_signatures', SIG_UPLOAD=null;
+function savedSigs(){ try{ return JSON.parse(localStorage.getItem(SIG_KEY)||'[]'); }catch(e){ return []; } }
+function storeSig(url){ var a=savedSigs(); if(a.indexOf(url)<0){ a.unshift(url); a=a.slice(0,6); try{ localStorage.setItem(SIG_KEY, JSON.stringify(a)); }catch(e){ showToast('⚠️ אין מקום לשמור את החתימה'); } } }
+function renderSavedSigs(){ var host=$('sigSavedList'); if(!host) return; var a=savedSigs();
+  host.innerHTML = a.length ? a.map(function(u,i){ return '<div class="sig-saved"><img src="'+u+'" onclick="PDFED.useSavedSig('+i+')"><button onclick="PDFED.deleteSavedSig('+i+')">✕</button></div>'; }).join('') : '<div class="sig-empty">עוד אין חתימות שמורות. צייר או העלה חתימה וסמן "שמור לשימוש חוזר".</div>'; }
+function sigTab(t){ ['draw','upload','saved'].forEach(function(k){ var p=$('sigPane-'+k), b=$('sigTabBtn-'+k); if(p) p.style.display = (k===t)?'':'none'; if(b) b.classList.toggle('on', k===t); }); $('sigModal').setAttribute('data-tab', t); }
+/* ניקוי רקע: לבן/אפור בהיר → שקוף, וחיתוך לשוליים */
+function cleanSigImage(src, cb){ var im=new Image(); im.onload=function(){ var max=900, s=Math.min(1, max/Math.max(im.width,im.height)); var cv=document.createElement('canvas'); cv.width=Math.round(im.width*s); cv.height=Math.round(im.height*s); var x=cv.getContext('2d'); x.drawImage(im,0,0,cv.width,cv.height);
+  var d=x.getImageData(0,0,cv.width,cv.height), px=d.data, minX=cv.width, minY=cv.height, maxX=0, maxY=0;
+  for(var i=0;i<px.length;i+=4){ var l=(px[i]*0.3+px[i+1]*0.59+px[i+2]*0.11); if(l>200){ px[i+3]=0; } else { px[i+3]=Math.min(255, Math.round((200-l)*3)); var p=i/4, xx=p%cv.width, yy=(p/cv.width)|0; if(xx<minX)minX=xx; if(xx>maxX)maxX=xx; if(yy<minY)minY=yy; if(yy>maxY)maxY=yy; } }
+  x.putImageData(d,0,0); if(maxX<=minX||maxY<=minY){ cb(null); return; }
+  var pad=6, out=document.createElement('canvas'); out.width=maxX-minX+pad*2; out.height=maxY-minY+pad*2; out.getContext('2d').drawImage(cv, minX-pad, minY-pad, out.width, out.height, 0, 0, out.width, out.height); cb(out.toDataURL('image/png')); }; im.src=src; }
+function handleSigUpload(inp){ var f=inp.files&&inp.files[0]; if(!f) return; var rd=new FileReader(); rd.onload=function(e){ cleanSigImage(e.target.result, function(url){ if(!url){ showToast('⚠️ לא זוהתה חתימה בתמונה'); return; } SIG_UPLOAD=url; $('sigUploadPreview').innerHTML='<img src="'+url+'">'; }); }; rd.readAsDataURL(f); }
+function useSigUrl(url){ var img=new Image(); img.onload=function(){ STATE.sigImg=img; $('sigModal').style.display='none'; setTool('sign'); showToast('✍️ הקש על המסמך במקום החתימה (או גרור מלבן)'); }; img.src=url; }
+function useSavedSig(i){ var a=savedSigs(); if(a[i]) useSigUrl(a[i]); }
+function deleteSavedSig(i){ var a=savedSigs(); a.splice(i,1); try{ localStorage.setItem(SIG_KEY, JSON.stringify(a)); }catch(e){} renderSavedSigs(); }
 window.openSigPad = openSigPad;
 function clearSig(){ var c=$('sigCanvas'); c.getContext('2d').clearRect(0,0,c.width,c.height); };
 function saveSig(){
   var c=$('sigCanvas');
   var img = new Image();
-  img.onload = function(){ STATE.sigImg = img; $('sigModal').style.display='none'; setTool('sign'); showToast('✍️ חתימה מוכנה — צייר מלבן על המסמך למקם אותה'); };
-  img.src = c.toDataURL('image/png');
+  var tab = $('sigModal').getAttribute('data-tab') || 'draw';
+  var keep = $('sigKeep') && $('sigKeep').checked;
+  if(tab==='upload'){ if(!SIG_UPLOAD){ showToast('⚠️ בחר קודם תמונה של החתימה'); return; } if(keep) storeSig(SIG_UPLOAD); useSigUrl(SIG_UPLOAD); return; }
+  cleanSigImage(c.toDataURL('image/png'), function(url){ if(!url){ showToast('⚠️ החתימה ריקה'); return; } if(keep) storeSig(url); useSigUrl(url); });
 };
-function closeSigPad(){ $('sigModal').style.display='none'; };
+function closeSigPad(){ $('sigModal').style.display='none'; placeAnnBar(); };
 
 /* ===== Bake annotations + export ===== */
 async function buildExportedBytes(){
@@ -42941,11 +43103,12 @@ async function buildExportedBytes(){
       } else if(a.type==='rect'){
         page.drawRectangle({x:x, y:y-a.h*factor, width:a.w*factor, height:a.h*factor, borderColor:PDFLib.rgb(0.9,0.2,0.2), borderWidth:1.5});
       } else if(a.type==='text'){
-        var textImg = await textToImage(a.text, a.font, a.size, a.color);
+        var textImg = await textToImage(a.text, a.font, a.size, a.color, a.bold, a.italic);
         var pngBytes2 = dataURLToBytes(textImg.dataUrl);
         var pngImg2 = await doc.embedPng(pngBytes2);
         var tw2 = textImg.w*factor, th2 = textImg.h*factor;
-        page.drawImage(pngImg2, {x:x, y:y-th2, width:tw2, height:th2});
+        /* הטקסט מעוגן בקצה הימני (RTL) — כמו על המסך */
+        page.drawImage(pngImg2, {x:x-(textImg.w-4)*factor, y:y-th2+2*factor, width:tw2, height:th2});
       } else if(a.type==='table'){
         var tw=a.w*factor, th=a.h*factor, tx=x, ty=y-th;
         var cw=tw/a.cols, ch=th/a.rows;
@@ -43005,16 +43168,17 @@ function hexToRgb(hex){
   hex = (hex||'#000000').replace('#','');
   return { r: parseInt(hex.substr(0,2),16)/255, g: parseInt(hex.substr(2,2),16)/255, b: parseInt(hex.substr(4,2),16)/255 };
 }
-function textToImage(text, font, size, color){
+function textToImage(text, font, size, color, bold, italic){
   return new Promise(function(resolve){
     var tmp = document.createElement('canvas');
     var tctx = tmp.getContext('2d');
     var fsize = size||16;
-    tctx.font = fsize+'px '+(font||'Arial');
+    var fpre = (italic?'italic ':'')+(bold?'700 ':'');
+    tctx.font = fpre+fsize+'px '+(font||'Arial');
     var metrics = tctx.measureText(text);
     var w = Math.ceil(metrics.width)+8, h = Math.ceil(fsize*1.4);
     tmp.width=w; tmp.height=h;
-    tctx.font = fsize+'px '+(font||'Arial');
+    tctx.font = fpre+fsize+'px '+(font||'Arial');
     tctx.fillStyle = color||'#000000';
     tctx.textBaseline='top'; tctx.direction='rtl'; tctx.textAlign='right';
     tctx.fillText(text, w-4, 2);
@@ -43436,7 +43600,8 @@ function pdfEditorInit(){
     trackColor,
     undoLast,
     updatePropsPanel,
-    zoomBy
+    zoomBy,
+    duplicateSelected, editSelected, editTextAnn, placeAnnBar, sigTab, handleSigUpload, useSavedSig, deleteSavedSig
   };
 })();
 
