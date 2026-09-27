@@ -5065,6 +5065,7 @@ tbody tr:hover td { background: rgba(255,255,255,0.02); }
     <div class="rgroup">
       <div class="rgroup-tools">
         <button class="rbtn primary" onclick="PDFED.exportCurrent()"><span class="ic"><svg><use href="#ic-export"/></svg></span>ייצוא</button>
+        <button class="rbtn" onclick="PDFED.shareCurrent()"><span class="ic qf">📤</span>שתף</button>
         <button class="rbtn" onclick="PDFED.exportWithPassword()"><span class="ic"><svg><use href="#ic-lock"/></svg></span>ייצוא מוגן</button>
         <button class="rbtn" onclick="PDFED.saveToProjectFolder()"><span class="ic"><svg><use href="#ic-save"/></svg></span>שמור בתיק פרויקט</button>
       </div>
@@ -5119,6 +5120,22 @@ tbody tr:hover td { background: rgba(255,255,255,0.02); }
         <button class="rbtn" onclick="PDFED.triggerImageUpload()"><span class="ic"><svg><use href="#ic-clipboard"/></svg></span>העלה תמונה</button>
       </div>
       <div class="rgroup-label">כלים נוספים</div>
+    </div>
+    <div class="rgroup">
+      <div class="rgroup-tools">
+        <button class="rbtn" id="tool-mark_check" onclick="PDFED.setTool('mark_check')"><span class="ic qf">✓</span>וי</button>
+        <button class="rbtn" id="tool-mark_x" onclick="PDFED.setTool('mark_x')"><span class="ic qf">✗</span>איקס</button>
+        <button class="rbtn" id="tool-mark_circle" onclick="PDFED.setTool('mark_circle')"><span class="ic qf">◯</span>הקפה</button>
+        <button class="rbtn" id="tool-date" onclick="PDFED.setTool('date')"><span class="ic qf">📅</span>תאריך היום</button>
+        <button class="rbtn" id="tool-stamp" onclick="PDFED.openStampPad()"><span class="ic qf">🔖</span>חותמת</button>
+      </div>
+      <div class="rgroup-label">מילוי מהיר — הקשה אחת</div>
+    </div>
+    <div class="rgroup">
+      <div class="rgroup-tools">
+        <button class="rbtn" id="tool-penonly" onclick="PDFED.togglePenOnly()"><span class="ic qf">✏️</span>עט בלבד</button>
+      </div>
+      <div class="rgroup-label">מגע</div>
     </div>
 </div>
 
@@ -5315,6 +5332,7 @@ tbody tr:hover td { background: rgba(255,255,255,0.02); }
     <div id="sigPane-upload" style="display:none"><label class="sig-drop">📷 צלם או בחר תמונה של החתימה שלך<small>על דף לבן — הרקע יוסר אוטומטית</small><input type="file" accept="image/*" onchange="PDFED.handleSigUpload(this)"></label><div id="sigUploadPreview" class="sig-prev"></div></div>
     <div id="sigPane-saved" style="display:none"><div id="sigSavedList" class="sig-saved-list"></div></div>
     <label class="sig-keep"><input type="checkbox" id="sigKeep" checked> שמור לשימוש חוזר</label>
+    <label class="sig-keep"><input type="checkbox" id="sigAllPages"> הצב באותו מקום בכל העמודים (ראשי תיבות)</label>
     <div class="modal-actions">
       <button onclick="PDFED.clearSig()">נקה</button>
       <button class="primary" onclick="PDFED.saveSig()">השתמש בחתימה</button>
@@ -5344,6 +5362,13 @@ body:not(:has(#page-pdfeditor.active)) #pdfedAnnBar{display:none!important}
 #sigModal .sig-saved button{position:absolute;top:3px;left:3px;border:none;background:#f3f3f3;border-radius:5px;font-size:11px;cursor:pointer;padding:2px 6px}
 #sigModal .sig-empty{grid-column:1/-1;font-size:12px;color:#888;text-align:center;padding:16px}
 #sigModal .sig-keep{display:flex;align-items:center;gap:6px;font-size:12px;margin:10px 0 0;color:#555}
+#sigModal.stamp-mode #sigTabBtn-draw{display:none}
+.rbtn .ic.qf{font-size:17px;font-weight:900;line-height:1;display:inline-flex;align-items:center;justify-content:center}
+#tool-penonly.on{background:#1B3A3D;color:#fff}
+#pdfedDraftBar{display:none;align-items:center;gap:10px;flex-wrap:wrap;margin:10px;padding:10px 14px;background:#FFF7E6;border:1.5px solid #EFD9A6;border-radius:10px;font-size:13px;color:#7a5a12}
+#pdfedDraftBar span{flex:1;min-width:160px;font-size:12px;color:#8a6a2c}
+#pdfedDraftBar button{font-family:inherit;font-size:12.5px;font-weight:700;border:1.5px solid #d9c38f;background:#fff;border-radius:8px;padding:7px 12px;cursor:pointer}
+#pdfedDraftBar button.primary{background:#1B3A3D;border-color:#1B3A3D;color:#fff}
 </style>
 
 <div class="modal-veil" id="tableModal">
@@ -40975,6 +41000,7 @@ select.c{font-family:inherit;font-size:12.5px;font-weight:600;border:1px solid v
   }
   var HF_MAX = 8*1024*1024; // 8MB per file
   function hfHandleFiles(fileList){
+    hfLoadForProject(hfProjId); /* קריאה טרייה — שלא לדרוס קבצים שנשמרו מהעורך/מסמכי ביצוע */
     var key = hfFkey();
     HF_FILES[key] = HF_FILES[key] || [];
     var files = Array.from(fileList||[]);
@@ -41000,6 +41026,7 @@ select.c{font-family:inherit;font-size:12.5px;font-weight:600;border:1px solid v
   }
   window.hfViewFile = function(key, i){
     var f = (HF_FILES[key]||[])[i]; if(!f || !f.data) return;
+    if(window.MiflasViewer){ MiflasViewer.open({name:f.name, type:f.type, size:f.size, data:f.data, origin:{projId:key.split('/')[0], key:key, name:f.name}}); return; }
     var w = window.open('', '_blank');
     if(w){
       if((f.type||'').indexOf('pdf')>=0 || (f.type||'').indexOf('image')>=0){ w.location.href = f.data; }
@@ -41008,6 +41035,7 @@ select.c{font-family:inherit;font-size:12.5px;font-weight:600;border:1px solid v
   };
   window.hfDownloadFile = function(key, i){
     var f = (HF_FILES[key]||[])[i]; if(!f || !f.data) return;
+    if(window.MiflasViewer){ MiflasViewer.download({name:f.name, type:f.type, data:f.data}); return; }
     var a = document.createElement('a'); a.href = f.data; a.download = f.name; a.click();
   };
 
@@ -41062,6 +41090,7 @@ select.c{font-family:inherit;font-size:12.5px;font-weight:600;border:1px solid v
   function hfFmtSize(b){ if(b<1024) return b+' B'; if(b<1024*1024) return (b/1024).toFixed(1)+' KB'; return (b/1024/1024).toFixed(1)+' MB'; }
 
   window.hfOpen = function(){
+    if(hfProjId) hfLoadForProject(hfProjId);
     hfPath = [hfTree()];
     hfRender();
   };
@@ -41082,11 +41111,16 @@ select.c{font-family:inherit;font-size:12.5px;font-weight:600;border:1px solid v
     var store = {};
     try{ store = JSON.parse(localStorage.getItem('pm_hf_files_'+projId)||'{}'); }catch(e){}
     store[key] = store[key] || [];
-    store[key].push({name:name, size:hfFmtSize(sizeBytes), sizeBytes:sizeBytes, type:type||'', data:dataUrl, uploadedAt:new Date().toISOString()});
-    try{ localStorage.setItem('pm_hf_files_'+projId, JSON.stringify(store)); return true; }
+    var rec = {name:name, size:hfFmtSize(sizeBytes), sizeBytes:sizeBytes, type:type||'', data:dataUrl, uploadedAt:new Date().toISOString()};
+    var ix = -1; store[key].forEach(function(f,j){ if(f.name===name) ix=j; });
+    if(ix>=0 && arguments[6]==='replace') store[key][ix] = rec; else store[key].push(rec);
+    try{ localStorage.setItem('pm_hf_files_'+projId, JSON.stringify(store)); }
     catch(e){ return false; }
+    if(projId===hfProjId){ HF_FILES = store; try{ hfRender(); }catch(e){} }  /* סנכרון הזיכרון של תיק הפרויקט */
+    return true;
   };
-  window.hfRemoveFile = function(key, i){ HF_FILES[key].splice(i,1); hfPersist(); hfRender(); };
+  window.hfRemoveFile = function(key, i){ hfLoadForProject(hfProjId); if(!HF_FILES[key]) return; HF_FILES[key].splice(i,1); hfPersist(); hfRender(); };
+  window.hfReloadIfCurrent = function(projId){ if(projId===hfProjId){ hfLoadForProject(projId); try{ hfRender(); }catch(e){} } };
   window.hfOpenCompareTool = function(){
     showPage('docs');
     setTimeout(function(){ var b=document.getElementById('qd-tab-compare'); if(b) b.click(); }, 250);
@@ -41948,7 +41982,7 @@ function handleFiles(fileList){
     var reader = new FileReader();
     reader.onload = function(e){
       STATE.files.push({ name: f.name, bytes: new Uint8Array(e.target.result), selected: false });
-      renderLibrary();
+      renderLibrary(); draftSaveSoon(); var db0=$('pdfedDraftBar'); if(db0) db0.style.display='none';
       if (STATE.activeIdx === null) openFile(STATE.files.length-1);
     };
     reader.readAsArrayBuffer(f);
@@ -42206,7 +42240,8 @@ async function duplicateCurrentPage(){
 function setTool(t){
   STATE.tool = t;
   document.querySelectorAll('.rbtn').forEach(b=>b.classList.remove('on'));
-  if(t) $('tool-'+t).classList.add('on');
+  if(t && $('tool-'+t)) $('tool-'+t).classList.add('on');
+  var pbo=$('tool-penonly'); if(pbo) pbo.classList.toggle('on', PENONLY);
   overlayCanvas.style.cursor = t ? 'crosshair' : 'default';
 };
 
@@ -42294,7 +42329,7 @@ function clearEditorCompletely(){
   if(es) es.style.display='flex';
   if(cw) cw.style.display='none';
   var host = $('thumbStrip'); if(host) host.innerHTML='';
-  renderLibrary();
+  renderLibrary(); draftClear();
   showToast('🗑 העורך נוקה — אפשר להעלות מסמכים חדשים');
 }
 var TEXTEDIT = {};
@@ -42418,8 +42453,17 @@ function annBounds(a){
     /* הטקסט מצויר מימין לשמאל: נקודת העוגן היא הקצה הימני */
     return {x:a.x-tw-6, y:a.y-6, w:tw+12, h:(a.size||16)*1.3+10};
   }
-  return {x:a.x, y:a.y, w:a.w||20, h:a.h||20};
+  var bw=(a.w||20), bh=(a.h||20), bx=a.x, by=a.y; if(bw<0){ bx+=bw; bw=-bw; } if(bh<0){ by+=bh; bh=-bh; }
+  return {x:bx, y:by, w:bw, h:bh};
 }
+/* מלבן "נקי" של האובייקט (בלי ריווח) — לשינוי גודל */
+function rawBox(a){
+  if(a.type==='line'||a.type==='arrow') return {x:Math.min(a.x1,a.x2), y:Math.min(a.y1,a.y2), w:Math.abs(a.x2-a.x1), h:Math.abs(a.y2-a.y1)};
+  if(a.type==='pen'){ var xs=a.points.map(function(p){return p.x;}), ys=a.points.map(function(p){return p.y;}); var x0=Math.min.apply(null,xs), y0=Math.min.apply(null,ys); return {x:x0, y:y0, w:Math.max.apply(null,xs)-x0, h:Math.max.apply(null,ys)-y0}; }
+  if(a.type==='text'){ var t=document.createElement('canvas').getContext('2d'); t.font=(a.italic?'italic ':'')+(a.bold?'700 ':'')+(a.size||16)+'px '+(a.font||'Arial'); var tw=t.measureText(a.text).width; return {x:a.x-tw, y:a.y, w:tw, h:(a.size||16)*1.3}; }
+  var b=annBounds(a); return {x:b.x, y:b.y, w:b.w, h:b.h};
+}
+function normRect(a){ if(a && a.w!==undefined && a.h!==undefined && a.type!=='text'){ if(a.w<0){ a.x+=a.w; a.w=-a.w; } if(a.h<0){ a.y+=a.h; a.h=-a.h; } } }
 function hitTest(px, py){
   var anns = pageAnns();
   for(var i=anns.length-1;i>=0;i--){
@@ -42436,8 +42480,7 @@ function drawSelectionBox(idx){
   octx.strokeStyle='#3b7dd8'; octx.lineWidth=1.5; octx.setLineDash([5,3]);
   octx.strokeRect(b.x, b.y, b.w, b.h);
   octx.setLineDash([]);
-  octx.fillStyle='#3b7dd8';
-  [[b.x,b.y],[b.x+b.w,b.y],[b.x,b.y+b.h],[b.x+b.w,b.y+b.h]].forEach(function(p){ octx.fillRect(p[0]-4,p[1]-4,8,8); });
+  [[b.x,b.y],[b.x+b.w,b.y],[b.x,b.y+b.h],[b.x+b.w,b.y+b.h]].forEach(function(p){ octx.fillStyle='#ffffff'; octx.fillRect(p[0]-6,p[1]-6,12,12); octx.strokeStyle='#3b7dd8'; octx.lineWidth=2; octx.strokeRect(p[0]-6,p[1]-6,12,12); });
   octx.restore();
 }
 function deleteSelected(){
@@ -42450,10 +42493,7 @@ function deleteSelected(){
 };
 
 /* ===== Zoom ===== */
-function zoomBy(delta){
-  STATE.scale = Math.max(0.5, Math.min(3, STATE.scale+delta));
-  if(STATE.pdfDoc) renderPage(STATE.pageNum);
-};
+function zoomBy(delta){ setScale(STATE.scale+delta); };
 
 /* ===== Table insertion ===== */
 var pendingTableRows=3, pendingTableCols=3;
@@ -42799,6 +42839,7 @@ function redrawAnnotations(){
   if(STATE.selected!==null && STATE.selected>=0) drawSelectionBox(STATE.selected);
   updatePropsPanel();
   placeAnnBar();
+  draftSaveSoon();
 }
 /* ===== סרגל פעולות צף לאובייקט נבחר: ערוך · שכפל · לכל העמודים · מחק ===== */
 function placeAnnBar(){
@@ -42807,7 +42848,7 @@ function placeAnnBar(){
     window.addEventListener('scroll', function(){ placeAnnBar(); }, true); window.addEventListener('resize', function(){ placeAnnBar(); }); }
   var pg = document.getElementById('page-pdfeditor');
   var a = (STATE.selected!==null && STATE.selected>=0) ? pageAnns()[STATE.selected] : null;
-  var modalOpen = ['sigModal','textEditModal','tableModal'].some(function(id){ var m=document.getElementById(id); return m && m.style.display==='flex'; });
+  var modalOpen = Array.prototype.some.call(document.querySelectorAll('#page-pdfeditor .modal-veil, #projPickerModal, #mvOverlay'), function(m){ return m.id==='mvOverlay' || getComputedStyle(m).display!=='none'; });
   if(!a || !overlayCanvas || !pg || !pg.classList.contains('active') || movingSelection || resizingHandle || modalOpen){ bar.style.display='none'; return; }
   var b = annBounds(a), r = overlayCanvas.getBoundingClientRect();
   var top = r.top + b.y - 46; if(top < r.top + 4) top = r.top + b.y + b.h + 8;
@@ -42889,11 +42930,11 @@ function drawAnn(a){
 }
 
 var dragStart=null, dragCurrent=null, penPoints=null, movingSelection=false, moveOrigin=null, resizingHandle=null;
-var HANDLE_R = 6;
+var HANDLE_R = 12; /* אזור תפיסה נוח לאצבע */
 function hitTestHandle(pt){
   if(STATE.selected===null || STATE.selected<0) return null;
   var a = pageAnns()[STATE.selected];
-  if(!['rect','ellipse','sign','table'].includes(a.type)) return null;
+  if(!a || a.type==='whiteout') return null;
   var b = annBounds(a);
   var corners = {tl:[b.x,b.y], tr:[b.x+b.w,b.y], bl:[b.x,b.y+b.h], br:[b.x+b.w,b.y+b.h]};
   for(var k in corners){
@@ -42916,7 +42957,7 @@ function setupOverlayEvents(){
       if(hiDbl>=0 && hiDbl===lastTap.idx && now-lastTap.t<400){ var aa = pageAnns()[hiDbl]; if(aa && aa.type==='text'){ lastTap={t:0,idx:-1}; editTextAnn(hiDbl); return; } }
       lastTap = {t:now, idx:hiDbl};
       var handle = hitTestHandle(pt);
-      if(handle){ resizingHandle = handle; moveOrigin = pt; snapshot(); return; }
+      if(handle){ normRect(pageAnns()[STATE.selected]); resizingHandle = handle; moveOrigin = pt; snapshot(); return; }
       var idx = hitTest(pt.x, pt.y);
       if(idx>=0){
         STATE.selected = idx; movingSelection=true; moveOrigin=pt; snapshot();
@@ -42925,6 +42966,11 @@ function setupOverlayEvents(){
         STATE.selected = null; redrawAnnotations();
       }
       return;
+    }
+    if(STATE.tool==='date' || (STATE.tool||'').indexOf('mark_')===0){ var hq=hitTest(pt.x,pt.y); if(hq>=0){ STATE.selected=hq; movingSelection=true; moveOrigin=pt; snapshot(); redrawAnnotations(); return; } placeQuick(pt); return; }
+    if(STATE.selected!==null && STATE.selected>=0 && ['highlight','rect','ellipse','line','arrow','pen','sign'].indexOf(STATE.tool)>=0){
+      var hh = hitTestHandle(pt); if(hh){ normRect(pageAnns()[STATE.selected]); resizingHandle=hh; moveOrigin=pt; snapshot(); return; }
+      if(hitTest(pt.x, pt.y)===STATE.selected){ movingSelection=true; moveOrigin=pt; snapshot(); return; }
     }
     dragStart = pt;
     if(STATE.tool==='pen') penPoints=[dragStart];
@@ -42984,12 +43030,14 @@ function setupOverlayEvents(){
     var r=overlayCanvas.getBoundingClientRect();
     var end = {x:ev.clientX-r.left, y:ev.clientY-r.top};
     var w=end.x-dragStart.x, h=end.y-dragStart.y;
-    var op=STATE.opacity, lw=STATE.lineWidth;
+    var op=STATE.opacity, lw=STATE.lineWidth, __cnt=pageAnns().length;
+    if(Math.abs(w)<=4 && Math.abs(h)<=4 && STATE.tool!=='text' && STATE.tool!=='smartedit'){ var ti=hitTest(end.x, end.y); STATE.selected = ti>=0 ? ti : null; if(STATE.tool!=='sign' || ti>=0){ dragStart=null; dragCurrent=null; penPoints=null; redrawAnnotations(); return; } }
     /* חתימה בהקשה אחת (בלי גרירה) — מוצבת בגודל ברירת מחדל לפי יחס התמונה */
     if(STATE.tool==='sign' && STATE.sigImg && Math.abs(w)<=4 && Math.abs(h)<=4){
-      var sw=170, sh=Math.round(170*(STATE.sigImg.naturalHeight||60)/(STATE.sigImg.naturalWidth||170));
+      var sw=STATE.sigIsStamp?120:(STATE.sigAllPages?90:170), sh=Math.round(sw*(STATE.sigImg.naturalHeight||60)/(STATE.sigImg.naturalWidth||170));
       snapshot(); pageAnns().push({type:'sign', x:dragStart.x-sw/2, y:dragStart.y-sh/2, w:sw, h:sh, img:STATE.sigImg, opacity:op});
-      STATE.selected = pageAnns().length-1; setTool(null); dragStart=null; redrawAnnotations(); showToast('✍️ החתימה הוצבה — אפשר לגרור ולשנות גודל'); return;
+      STATE.selected = pageAnns().length-1; setTool(null); dragStart=null; redrawAnnotations();
+      if(STATE.sigAllPages){ STATE.sigAllPages=false; duplicateSelectedToAllPages(); } else showToast('✍️ הוצב — אפשר לגרור ולשנות גודל'); return;
     }
     if(STATE.tool==='pen' && penPoints && penPoints.length>1){
       snapshot(); pageAnns().push({type:'pen', points:penPoints, color:$('colorPicker').value, lw:lw, opacity:op});
@@ -43004,6 +43052,7 @@ function setupOverlayEvents(){
       else if(STATE.tool==='formtext') pageAnns().push({type:'formtext', x:dragStart.x, y:dragStart.y, w:Math.max(w,60), h:Math.max(h,20), name:'text_field_'+Date.now()});
       else if(STATE.tool==='formcheckbox') pageAnns().push({type:'formcheckbox', x:dragStart.x, y:dragStart.y, w:Math.max(Math.min(w,30),18), h:Math.max(Math.min(h,30),18), name:'checkbox_'+Date.now()});
     }
+    if(pageAnns().length>__cnt){ var na=pageAnns()[pageAnns().length-1]; normRect(na); STATE.selected=pageAnns().length-1; }
     dragStart=null; dragCurrent=null; penPoints=null; redrawAnnotations();
   });
   window.addEventListener('keydown', function(ev){
@@ -43028,15 +43077,110 @@ function moveAnn(a, dx, dy){
   else { a.x+=dx; a.y+=dy; }
 }
 function resizeAnn(a, handle, dx, dy){
-  var minSize = 15;
-  if(handle==='br'){ a.w=Math.max(minSize,a.w+dx); a.h=Math.max(minSize,a.h+dy); }
-  else if(handle==='bl'){ var nw=Math.max(minSize,a.w-dx); a.x+=a.w-nw; a.w=nw; a.h=Math.max(minSize,a.h+dy); }
-  else if(handle==='tr'){ var nh=Math.max(minSize,a.h-dy); a.y+=a.h-nh; a.h=nh; a.w=Math.max(minSize,a.w+dx); }
-  else if(handle==='tl'){ var nw2=Math.max(minSize,a.w-dx); var nh2=Math.max(minSize,a.h-dy); a.x+=a.w-nw2; a.y+=a.h-nh2; a.w=nw2; a.h=nh2; }
+  var b0=rawBox(a), nb={x:b0.x, y:b0.y, w:b0.w, h:b0.h}, MIN=12;
+  if(handle.indexOf('r')>=0){ nb.w=Math.max(MIN, b0.w+dx); }
+  if(handle.indexOf('l')>=0){ var w2=Math.max(MIN, b0.w-dx); nb.x=b0.x+b0.w-w2; nb.w=w2; }
+  if(handle.indexOf('b')>=0){ nb.h=Math.max(MIN, b0.h+dy); }
+  if(handle.indexOf('t')>=0){ var h2=Math.max(MIN, b0.h-dy); nb.y=b0.y+b0.h-h2; nb.h=h2; }
+  var sx = b0.w>0.5 ? nb.w/b0.w : 1, sy = b0.h>0.5 ? nb.h/b0.h : 1;
+  function mx(x){ return nb.x+(x-b0.x)*sx; } function my(y){ return nb.y+(y-b0.y)*sy; }
+  if(a.type==='line'||a.type==='arrow'){ a.x1=mx(a.x1); a.y1=my(a.y1); a.x2=mx(a.x2); a.y2=my(a.y2); }
+  else if(a.type==='pen'){ a.points.forEach(function(p){ p.x=mx(p.x); p.y=my(p.y); }); }
+  else if(a.type==='text'){ var k=(handle==='tl'||handle==='br'||handle==='tr'||handle==='bl') ? Math.max(sx,sy) : sy; a.size=Math.max(6, Math.round((a.size||16)*k*10)/10); var nb2=rawBox(a); a.x = (handle.indexOf('l')>=0) ? b0.x+b0.w : nb.x+nb2.w; a.y = (handle.indexOf('t')>=0) ? b0.y+b0.h-nb2.h : nb.y; }
+  else { normRect(a); a.x=nb.x; a.y=nb.y; a.w=nb.w; a.h=nb.h; }
 }
 
+/* ═══════════ עורך v3 — גלילה/צביטה במגע · עט בלבד · סימונים מהירים · תאריך · חותמות · שיתוף · טיוטה אוטומטית ═══════════ */
+var PENONLY = (function(){ try{ return localStorage.getItem('miflas_pdfed_penonly')==='1'; }catch(e){ return false; } })();
+function togglePenOnly(){ PENONLY=!PENONLY; try{ localStorage.setItem('miflas_pdfed_penonly', PENONLY?'1':'0'); }catch(e){} var b=$('tool-penonly'); if(b) b.classList.toggle('on', PENONLY); showToast(PENONLY?'✏️ עט בלבד: ה-Pencil מסמן, האצבע גוללת':'✋ מצב רגיל: אצבע ו-Pencil מסמנים'); }
+function scrollHost(){ var el=overlayCanvas&&overlayCanvas.parentElement; while(el && el!==document.body){ var cs=getComputedStyle(el); if(/(auto|scroll)/.test(cs.overflowY+cs.overflowX) && (el.scrollHeight>el.clientHeight+2 || el.scrollWidth>el.clientWidth+2)) return el; el=el.parentElement; } return document.scrollingElement; }
+/* שינוי זום ששומר על מיקום הסימונים (לפני כן סימונים "זזו" אחרי זום) */
+function scaleAllAnns(r){ Object.keys(STATE.annotations).forEach(function(fi){ var pages=STATE.annotations[fi]||{}; Object.keys(pages).forEach(function(pn){ (pages[pn]||[]).forEach(function(a){ ['x','y','w','h','x1','y1','x2','y2'].forEach(function(k){ if(typeof a[k]==='number') a[k]*=r; }); if(a.points) a.points.forEach(function(p){ p.x*=r; p.y*=r; }); if(a.type==='text' && a.size) a.size=Math.round(a.size*r*10)/10; }); }); }); }
+function setScale(ns){ ns=Math.max(0.5, Math.min(3.5, ns)); if(Math.abs(ns-STATE.scale)<0.001) return; var r=ns/STATE.scale; scaleAllAnns(r); STATE.scale=ns; undoStacks={}; redoStacks={}; if(STATE.pdfDoc) renderPage(STATE.pageNum); }
+function setupTouchNav(){
+  var host = overlayCanvas.parentElement; if(!host || host.__touchNav) return; host.__touchNav=true;
+  var T = {}, mode = null, last = null, pinch0 = null, scale0 = 1;
+  function pts(){ return Object.keys(T).map(function(k){ return T[k]; }); }
+  function center(a){ return {x:(a[0].x+a[1].x)/2, y:(a[0].y+a[1].y)/2}; }
+  function dist(a){ return Math.hypot(a[0].x-a[1].x, a[0].y-a[1].y); }
+  host.addEventListener('pointerdown', function(ev){
+    if(ev.target!==overlayCanvas || ev.pointerType!=='touch') return;
+    T[ev.pointerId] = {x:ev.clientX, y:ev.clientY};
+    var P = pts();
+    if(P.length===2){
+      var ce=new PointerEvent('pointercancel', {pointerId:+Object.keys(T)[0], pointerType:'touch', bubbles:true}); ce.__synth=true; overlayCanvas.dispatchEvent(ce);
+      try{ host.setPointerCapture(ev.pointerId); }catch(x){}
+      mode='pinch'; pinch0=dist(P); last=center(P); scale0=STATE.scale; overlayCanvas.style.transformOrigin='0 0';
+      ev.stopPropagation(); ev.preventDefault(); return;
+    }
+    var r=overlayCanvas.getBoundingClientRect(), pt={x:ev.clientX-r.left, y:ev.clientY-r.top};
+    var onObj = hitTest(pt.x,pt.y)>=0 || !!hitTestHandle(pt);
+    if(PENONLY || (!STATE.tool && !onObj)){ mode='pan'; last={x:ev.clientX, y:ev.clientY}; try{ host.setPointerCapture(ev.pointerId); }catch(x){} ev.stopPropagation(); ev.preventDefault(); }
+    else mode='draw';
+  }, true);
+  host.addEventListener('pointermove', function(ev){
+    if(!(ev.pointerId in T)) return;
+    T[ev.pointerId] = {x:ev.clientX, y:ev.clientY};
+    var sh = scrollHost();
+    if(mode==='pan'){ sh.scrollLeft -= ev.clientX-last.x; sh.scrollTop -= ev.clientY-last.y; last={x:ev.clientX, y:ev.clientY}; ev.stopPropagation(); ev.preventDefault(); }
+    else if(mode==='pinch'){ var P=pts(); if(P.length<2) return; var c=center(P); sh.scrollLeft -= c.x-last.x; sh.scrollTop -= c.y-last.y; last=c;
+      var k=dist(P)/pinch0; var s=Math.max(0.5/scale0, Math.min(3.5/scale0, k)); canvas.style.transform=overlayCanvas.style.transform='scale('+s+')'; canvas.style.transformOrigin='0 0'; ev.stopPropagation(); ev.preventDefault(); }
+  }, true);
+  function end(ev){
+    if(ev.__synth || !(ev.pointerId in T)) return;
+    var P=pts(), wasMode=mode;
+    if(wasMode==='pinch' && P.length===2){ var k=dist(P)/pinch0; canvas.style.transform=overlayCanvas.style.transform=''; setScale(scale0*k); }
+    delete T[ev.pointerId];
+    if(!Object.keys(T).length){ mode=null; }
+    else if(wasMode==='pinch'){ mode='done'; }
+    if(wasMode==='pan'||wasMode==='pinch'||wasMode==='done'){ ev.stopPropagation(); }
+  }
+  host.addEventListener('pointerup', end, true); host.addEventListener('pointercancel', end, true);
+}
+/* סימונים מהירים: ✓ ✗ ○ — הקשה אחת */
+function markImg(kind, color){ var c=document.createElement('canvas'); c.width=c.height=96; var x=c.getContext('2d'); x.strokeStyle=color||'#1a3fa0'; x.lineWidth=kind==='circle'?7:11; x.lineCap='round'; x.lineJoin='round'; x.beginPath();
+  if(kind==='check'){ x.moveTo(16,52); x.lineTo(40,76); x.lineTo(82,20); } else if(kind==='x'){ x.moveTo(20,20); x.lineTo(76,76); x.moveTo(76,20); x.lineTo(20,76); } else { x.ellipse(48,48,40,34,0,0,7); }
+  x.stroke(); var im=new Image(); im.src=c.toDataURL('image/png'); return im; }
+function placeQuick(pt){
+  var t=STATE.tool, col=($('colorPicker')?$('colorPicker').value:'#1a3fa0'), op=STATE.opacity;
+  snapshot();
+  if(t==='date'){ var d=new Date(), z=function(n){return (n<10?'0':'')+n;}; var s=z(d.getDate())+'/'+z(d.getMonth()+1)+'/'+d.getFullYear(); var sz=($('fontSize')?parseInt($('fontSize').value,10):16)||16;
+    pageAnns().push({type:'text', x:pt.x+40, y:pt.y-sz*0.6, text:s, color:col, font:($('fontFamily')?$('fontFamily').value:'Arial'), size:sz, bold:true}); }
+  else { var kind=t.replace('mark_',''), w=kind==='circle'?64:30, h=kind==='circle'?40:30, im=markImg(kind, col);
+    pageAnns().push({type:'image', x:pt.x-w/2, y:pt.y-h/2, w:w, h:h, img:im, opacity:op, mark:kind}); }
+  STATE.selected=pageAnns().length-1; redrawAnnotations();
+}
+/* שיתוף ישיר (וואטסאפ, מייל, קבצים) — חלון השיתוף של המכשיר */
+async function shareCurrent(){
+  if(STATE.activeIdx===null){ showToast('פתח מסמך קודם'); return; }
+  var f=STATE.files[STATE.activeIdx], bytes=await buildExportedBytes(); if(!bytes) return;
+  var name=f.name.replace(/\.pdf$/i,'')+'_ערוך.pdf';
+  try{ var file=new File([bytes], name, {type:'application/pdf'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file], title:name}); return; } }catch(e){ if(e && e.name==='AbortError') return; }
+  downloadBytes(bytes, name); showToast('השיתוף הישיר לא נתמך בדפדפן הזה — הקובץ הורד');
+}
+/* טיוטה אוטומטית (IndexedDB) — העבודה לא הולכת לאיבוד ברענון/סגירה */
+var DRAFT_T=null, DRAFT_DB='miflas_pdfed', DRAFT_OFF=false;
+function idb(cb){ try{ var rq=indexedDB.open(DRAFT_DB,1); rq.onupgradeneeded=function(){ rq.result.createObjectStore('d'); }; rq.onsuccess=function(){ cb(rq.result); }; rq.onerror=function(){ cb(null); }; }catch(e){ cb(null); } }
+function draftSaveSoon(){ if(DRAFT_OFF) return; clearTimeout(DRAFT_T); DRAFT_T=setTimeout(draftSave, 1200); }
+function draftSave(){ if(!STATE.files.length){ draftClear(); return; }
+  var ann={}; Object.keys(STATE.annotations).forEach(function(fi){ ann[fi]={}; Object.keys(STATE.annotations[fi]||{}).forEach(function(pn){ ann[fi][pn]=(STATE.annotations[fi][pn]||[]).map(stripImg); }); });
+  var data={t:Date.now(), files:STATE.files.map(function(f){ return {name:f.name, bytes:f.bytes}; }), ann:JSON.parse(JSON.stringify(ann)), active:STATE.activeIdx, page:STATE.pageNum, scale:STATE.scale};
+  idb(function(db){ if(!db) return; try{ db.transaction('d','readwrite').objectStore('d').put(data,'cur'); }catch(e){} }); }
+function draftClear(){ idb(function(db){ if(!db) return; try{ db.transaction('d','readwrite').objectStore('d').delete('cur'); }catch(e){} }); }
+function draftCheck(){ if(STATE.files.length) return; idb(function(db){ if(!db) return; try{ var rq=db.transaction('d').objectStore('d').get('cur'); rq.onsuccess=function(){ var d=rq.result; if(!d||!d.files||!d.files.length||STATE.files.length) return;
+  var bar=$('pdfedDraftBar'); if(!bar){ bar=document.createElement('div'); bar.id='pdfedDraftBar'; var host=$('pdfedEmptyState')||overlayCanvas.parentElement; host.parentElement.insertBefore(bar, host); }
+  var tm=new Date(d.t); bar.innerHTML='<b>📝 נמצאה טיוטה שלא נשמרה</b><span>'+d.files.map(function(f){return f.name;}).join(', ')+' · '+tm.toLocaleDateString('he-IL')+' '+tm.toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})+'</span><button class="primary" onclick="PDFED.draftRestore()">המשך מהטיוטה</button><button onclick="PDFED.draftDiscard()">מחק טיוטה</button>'; bar.style.display='flex'; window.__pdfedDraft=d; }; }catch(e){} }); }
+function draftRestore(){ var d=window.__pdfedDraft; if(!d) return; var bar=$('pdfedDraftBar'); if(bar) bar.style.display='none';
+  STATE.files=d.files.map(function(f){ return {name:f.name, bytes:new Uint8Array(f.bytes), selected:false}; }); STATE.annotations={}; STATE.scale=d.scale||STATE.scale;
+  var pending=0; Object.keys(d.ann||{}).forEach(function(fi){ STATE.annotations[fi]={}; Object.keys(d.ann[fi]).forEach(function(pn){ pending++; restoreImgs(d.ann[fi][pn], function(arr){ STATE.annotations[fi][pn]=arr; if(--pending===0) go(); }); }); });
+  function go(){ renderLibrary(); openFile(d.active!=null&&STATE.files[d.active]?d.active:0); if(d.page>1) setTimeout(function(){ renderPage(Math.min(d.page, STATE.pdfDoc?STATE.pdfDoc.numPages:1)); }, 600); showToast('✅ הטיוטה שוחזרה'); }
+  if(pending===0) go(); }
+function draftDiscard(){ if(!confirm('למחוק את הטיוטה?')) return; draftClear(); var bar=$('pdfedDraftBar'); if(bar) bar.style.display='none'; window.__pdfedDraft=null; }
+
 /* ===== Signature pad ===== */
-function openSigPad(){ var _ab=document.getElementById('pdfedAnnBar'); if(_ab) _ab.style.display='none'; $('sigModal').style.display='flex'; var c=$('sigCanvas'); var sctx=c.getContext('2d'); sctx.clearRect(0,0,c.width,c.height); sctx.lineWidth=2.5; sctx.strokeStyle='#1c2128'; sctx.lineCap='round';
+function openSigPad(){ if(!openSigPad.__stamp) SIG_MODE='sig'; openSigPad.__stamp=false; var _ab=document.getElementById('pdfedAnnBar'); if(_ab) _ab.style.display='none'; $('sigModal').style.display='flex';
+  var st=SIG_MODE==='stamp'; $('sigModal').classList.toggle('stamp-mode', st); var h=$('sigModal').querySelector('h4'); if(h) h.textContent = st ? 'חותמת' : 'חתימה'; var c=$('sigCanvas'); var sctx=c.getContext('2d'); sctx.clearRect(0,0,c.width,c.height); sctx.lineWidth=2.5; sctx.strokeStyle='#1c2128'; sctx.lineCap='round';
   var drawing=false, last=null;
   c.style.touchAction='none';
   var sx=function(e){ var r=c.getBoundingClientRect(); return {x:(e.clientX-r.left)*c.width/r.width, y:(e.clientY-r.top)*c.height/r.height}; };
@@ -43046,22 +43190,24 @@ function openSigPad(){ var _ab=document.getElementById('pdfedAnnBar'); if(_ab) _
   sigTab('draw'); renderSavedSigs();
 }
 /* חתימות שמורות לשימוש חוזר (נשמרות בדפדפן, נכללות בגיבוי המערכת) */
-var SIG_KEY='miflas_signatures', SIG_UPLOAD=null;
-function savedSigs(){ try{ return JSON.parse(localStorage.getItem(SIG_KEY)||'[]'); }catch(e){ return []; } }
-function storeSig(url){ var a=savedSigs(); if(a.indexOf(url)<0){ a.unshift(url); a=a.slice(0,6); try{ localStorage.setItem(SIG_KEY, JSON.stringify(a)); }catch(e){ showToast('⚠️ אין מקום לשמור את החתימה'); } } }
+var SIG_KEY='miflas_signatures', SIG_UPLOAD=null, SIG_MODE='sig';
+function sigKey(){ return SIG_MODE==='stamp' ? 'miflas_stamps' : SIG_KEY; }
+function savedSigs(){ try{ return JSON.parse(localStorage.getItem(sigKey())||'[]'); }catch(e){ return []; } }
+function storeSig(url){ var a=savedSigs(); if(a.indexOf(url)<0){ a.unshift(url); a=a.slice(0,6); try{ localStorage.setItem(sigKey(), JSON.stringify(a)); }catch(e){ showToast('⚠️ אין מקום לשמור את החתימה'); } } }
 function renderSavedSigs(){ var host=$('sigSavedList'); if(!host) return; var a=savedSigs();
   host.innerHTML = a.length ? a.map(function(u,i){ return '<div class="sig-saved"><img src="'+u+'" onclick="PDFED.useSavedSig('+i+')"><button onclick="PDFED.deleteSavedSig('+i+')">✕</button></div>'; }).join('') : '<div class="sig-empty">עוד אין חתימות שמורות. צייר או העלה חתימה וסמן "שמור לשימוש חוזר".</div>'; }
 function sigTab(t){ ['draw','upload','saved'].forEach(function(k){ var p=$('sigPane-'+k), b=$('sigTabBtn-'+k); if(p) p.style.display = (k===t)?'':'none'; if(b) b.classList.toggle('on', k===t); }); $('sigModal').setAttribute('data-tab', t); }
 /* ניקוי רקע: לבן/אפור בהיר → שקוף, וחיתוך לשוליים */
 function cleanSigImage(src, cb){ var im=new Image(); im.onload=function(){ var max=900, s=Math.min(1, max/Math.max(im.width,im.height)); var cv=document.createElement('canvas'); cv.width=Math.round(im.width*s); cv.height=Math.round(im.height*s); var x=cv.getContext('2d'); x.drawImage(im,0,0,cv.width,cv.height);
   var d=x.getImageData(0,0,cv.width,cv.height), px=d.data, minX=cv.width, minY=cv.height, maxX=0, maxY=0;
-  for(var i=0;i<px.length;i+=4){ var l=(px[i]*0.3+px[i+1]*0.59+px[i+2]*0.11); if(l>200){ px[i+3]=0; } else { px[i+3]=Math.min(255, Math.round((200-l)*3)); var p=i/4, xx=p%cv.width, yy=(p/cv.width)|0; if(xx<minX)minX=xx; if(xx>maxX)maxX=xx; if(yy<minY)minY=yy; if(yy>maxY)maxY=yy; } }
+  for(var i=0;i<px.length;i+=4){ var a0=px[i+3], l=(px[i]*0.3+px[i+1]*0.59+px[i+2]*0.11); if(a0<24 || l>200){ px[i+3]=0; } else { px[i+3]=Math.min(a0, 255, Math.round((200-l)*3)); var p=i/4, xx=p%cv.width, yy=(p/cv.width)|0; if(xx<minX)minX=xx; if(xx>maxX)maxX=xx; if(yy<minY)minY=yy; if(yy>maxY)maxY=yy; } }
   x.putImageData(d,0,0); if(maxX<=minX||maxY<=minY){ cb(null); return; }
   var pad=6, out=document.createElement('canvas'); out.width=maxX-minX+pad*2; out.height=maxY-minY+pad*2; out.getContext('2d').drawImage(cv, minX-pad, minY-pad, out.width, out.height, 0, 0, out.width, out.height); cb(out.toDataURL('image/png')); }; im.src=src; }
 function handleSigUpload(inp){ var f=inp.files&&inp.files[0]; if(!f) return; var rd=new FileReader(); rd.onload=function(e){ cleanSigImage(e.target.result, function(url){ if(!url){ showToast('⚠️ לא זוהתה חתימה בתמונה'); return; } SIG_UPLOAD=url; $('sigUploadPreview').innerHTML='<img src="'+url+'">'; }); }; rd.readAsDataURL(f); }
-function useSigUrl(url){ var img=new Image(); img.onload=function(){ STATE.sigImg=img; $('sigModal').style.display='none'; setTool('sign'); showToast('✍️ הקש על המסמך במקום החתימה (או גרור מלבן)'); }; img.src=url; }
+function useSigUrl(url){ var img=new Image(); img.onload=function(){ STATE.sigImg=img; STATE.sigAllPages = !!($('sigAllPages') && $('sigAllPages').checked); STATE.sigIsStamp = SIG_MODE==='stamp'; $('sigModal').style.display='none'; setTool('sign'); showToast(STATE.sigAllPages ? '✍️ הקש במקום הרצוי — יוצב באותו מקום בכל העמודים' : (STATE.sigIsStamp?'🔖 הקש על המסמך במקום החותמת':'✍️ הקש על המסמך במקום החתימה (או גרור מלבן)')); }; img.src=url; }
 function useSavedSig(i){ var a=savedSigs(); if(a[i]) useSigUrl(a[i]); }
-function deleteSavedSig(i){ var a=savedSigs(); a.splice(i,1); try{ localStorage.setItem(SIG_KEY, JSON.stringify(a)); }catch(e){} renderSavedSigs(); }
+function deleteSavedSig(i){ var a=savedSigs(); a.splice(i,1); try{ localStorage.setItem(sigKey(), JSON.stringify(a)); }catch(e){} renderSavedSigs(); }
+function openStampPad(){ SIG_MODE='stamp'; openSigPad.__stamp=true; openSigPad(); sigTab(savedSigs().length?'saved':'upload'); }
 window.openSigPad = openSigPad;
 function clearSig(){ var c=$('sigCanvas'); c.getContext('2d').clearRect(0,0,c.width,c.height); };
 function saveSig(){
@@ -43385,8 +43531,14 @@ function printCurrent(){
 };
 
 var PP = { projId:null, projName:null, path:[] };
+function openBytes(name, bytes, origin){ STATE.files.push({name:name, bytes:bytes, selected:false, origin:origin||null}); renderLibrary(); openFile(STATE.files.length-1); draftSaveSoon(); var db0=$('pdfedDraftBar'); if(db0) db0.style.display='none'; showToast('✏️ '+name+' נפתח לעריכה'+(origin?' — "שמור בתיק פרויקט" ישמור חזרה לאותה תיקייה':'')); }
+async function saveBackToOrigin(){ var f=STATE.files[STATE.activeIdx], o=f&&f.origin; if(!o) return false;
+  var bytes=await buildExportedBytes(); if(!bytes) return true; var blob=new Blob([bytes],{type:'application/pdf'});
+  return await new Promise(function(res){ var rd=new FileReader(); rd.onload=function(e){ var parts=o.key.split('/'); var ok=window.hfSaveExternalFile&&window.hfSaveExternalFile(o.projId, parts.slice(1), o.name, 'application/pdf', e.target.result, blob.size, 'replace'); showToast(ok?'💾 נשמר חזרה ל"'+parts.slice(2).join(' > ')+'" (הגרסה הקודמת הוחלפה)':'⚠️ אין מקום לשמור — נסה "דחיסת PDF" קודם', ok?undefined:'var(--orange)'); res(true); }; rd.readAsDataURL(blob); }); }
 function saveToProjectFolder(){
   if(STATE.activeIdx===null){ showToast('פתח מסמך קודם'); return; }
+  var _of = STATE.files[STATE.activeIdx];
+  if(_of && _of.origin){ if(confirm('לשמור חזרה לתיקייה שממנה נפתח הקובץ?\n\n'+_of.origin.key.split('/').slice(2).join(' > ')+' / '+_of.origin.name+'\n\nאישור = מחליף את הגרסה הקודמת · ביטול = לבחור תיקייה אחרת')){ saveBackToOrigin(); return; } }
   var projects = (typeof loadProjects==='function') ? loadProjects() : [];
   if(!projects.length){ showToast('אין פרויקטים במערכת עדיין'); return; }
   PP = { projId:null, projName:null, path:[] };
@@ -43399,8 +43551,9 @@ function saveToProjectFolder(){
     return '<button class="action-btn" style="text-align:right;justify-content:flex-start;" onclick="PDFED.ppSelectProject(\''+p.id+'\',\''+String(p.name||'').replace(/'/g,"\\'")+'\')">📁 '+escHtmlSafe(p.name)+'</button>';
   }).join('');
   $('projPickerModal').style.display = 'flex';
+  var _ab=document.getElementById('pdfedAnnBar'); if(_ab) _ab.style.display='none';
 }
-function closeProjPicker(){ $('projPickerModal').style.display = 'none'; }
+function closeProjPicker(){ $('projPickerModal').style.display = 'none'; placeAnnBar(); }
 function ppSelectProject(projId, projName){
   PP.projId = projId; PP.projName = projName;
   var tree = (typeof window.hfGetTree==='function') ? window.hfGetTree() : null;
@@ -43474,6 +43627,9 @@ function pdfEditorInit(){
   canvas = $('pdfCanvas'); ctx = canvas.getContext('2d');
   overlayCanvas = $('overlayCanvas'); octx = overlayCanvas.getContext('2d');
   setupOverlayEvents();
+  try{ setupTouchNav(); }catch(e){ log('touchnav '+e.message); }
+  var pb=$('tool-penonly'); if(pb) pb.classList.toggle('on', PENONLY);
+  setTimeout(draftCheck, 400);
   initWorker(function(){ log('worker ready'); });
   $('pdfedFileInput').addEventListener('change', function(e){ handleFiles(e.target.files); });
   var imgInp = $('pdfedImageInput');
@@ -43601,7 +43757,9 @@ function pdfEditorInit(){
     undoLast,
     updatePropsPanel,
     zoomBy,
-    duplicateSelected, editSelected, editTextAnn, placeAnnBar, sigTab, handleSigUpload, useSavedSig, deleteSavedSig
+    duplicateSelected, editSelected, editTextAnn, placeAnnBar, sigTab, handleSigUpload, useSavedSig, deleteSavedSig,
+    pageAnns, annBounds, getSelected: function(){ return STATE.selected; },
+    togglePenOnly, shareCurrent, openStampPad, openBytes, saveBackToOrigin, draftRestore, draftDiscard, draftSave, setScale, getScale: function(){ return STATE.scale; }
   };
 })();
 
@@ -44661,7 +44819,7 @@ window.pdfEditorInit = function(){ PDFED.pdfEditorInit(); };
     {n:'ביצוע/צו תחילת עבודה',label:'צו תחילת עבודה (תיקייה קיימת)',ic:'📄'}];
   var S={f:'תכניות לביצוע',sub:'',q:''};
   function store(){return J('pm_hf_files_'+pid(),{});}
-  function save(o){try{localStorage.setItem('pm_hf_files_'+pid(),JSON.stringify(o));return true;}catch(e){if(window.showToast)showToast('⚠️ אין מקום באחסון הדפדפן לקובץ הזה — ראה הערה על אחסון בענן','var(--orange)');return false;}}
+  function save(o){try{localStorage.setItem('pm_hf_files_'+pid(),JSON.stringify(o));if(window.hfReloadIfCurrent)hfReloadIfCurrent(pid());return true;}catch(e){if(window.showToast)showToast('⚠️ אין מקום באחסון הדפדפן לקובץ הזה — ראה הערה על אחסון בענן','var(--orange)');return false;}}
   function key(f,sub){return pid()+'/'+ROOT+'/'+EX+'/'+f+(sub?'/'+sub:'');}
   function fmt(b){if(b<1024)return b+' B';if(b<1048576)return (b/1024).toFixed(0)+' KB';return (b/1048576).toFixed(1)+' MB';}
   function ic(t,n){t=t||'';n=(n||'').toLowerCase();if(t.indexOf('pdf')>=0||/\.pdf$/.test(n))return 'PDF';if(t.indexOf('image')>=0)return 'IMG';if(/\.(dwg|dxf)$/.test(n))return 'DWG';if(/\.(xlsx?|csv)$/.test(n))return 'XLS';if(/\.docx?$/.test(n))return 'DOC';return 'FILE';}
@@ -44696,8 +44854,8 @@ window.pdfEditorInit = function(){ PDFED.pdfEditorInit(); };
     up:function(inp){var fs=[].slice.call(inp.files||[]);if(!fs.length)return;var k=key(S.f,S.sub),st=store(),left=fs.length,add=0,skip=0;st[k]=st[k]||[];
       fs.forEach(function(f){if(f.size>8*1048576){skip++;if(--left===0)fin();return;}var r=new FileReader();r.onload=function(e){st[k].push({name:f.name,size:fmt(f.size),sizeBytes:f.size,type:f.type||'',data:e.target.result,uploadedAt:new Date().toISOString()});add++;if(--left===0)fin();};r.readAsDataURL(f);});
       function fin(){if(save(st)&&window.showToast)showToast('✅ '+add+' קבצים נשמרו'+(skip?' · '+skip+' דולגו (מעל 8MB)':''));rer();}},
-    view:function(k,i){var f=(store()[k]||[])[i];if(!f||!f.data)return;var w=window.open('','_blank');if(!w)return;if((f.type||'').indexOf('pdf')>=0||(f.type||'').indexOf('image')>=0){w.document.write('<title>'+esc(f.name)+'</title><iframe src="'+f.data+'" style="border:0;position:fixed;inset:0;width:100%;height:100%"></iframe>');w.document.close();}else{w.document.write('<p style="font-family:sans-serif;padding:30px" dir="rtl">אין תצוגה מקדימה לסוג הזה — <a download="'+esc(f.name)+'" href="'+f.data+'">הורד את הקובץ</a></p>');w.document.close();}},
-    dl:function(k,i){var f=(store()[k]||[])[i];if(!f)return;var a=document.createElement('a');a.href=f.data;a.download=f.name;a.click();},
+    view:function(k,i){var f=(store()[k]||[])[i];if(!f||!f.data)return;if(window.MiflasViewer){MiflasViewer.open({name:f.name,type:f.type,size:f.size,data:f.data,origin:{projId:pid(),key:k,name:f.name}});return;}var w=window.open('','_blank');if(!w)return;if((f.type||'').indexOf('pdf')>=0||(f.type||'').indexOf('image')>=0){w.document.write('<title>'+esc(f.name)+'</title><iframe src="'+f.data+'" style="border:0;position:fixed;inset:0;width:100%;height:100%"></iframe>');w.document.close();}else{w.document.write('<p style="font-family:sans-serif;padding:30px" dir="rtl">אין תצוגה מקדימה לסוג הזה — <a download="'+esc(f.name)+'" href="'+f.data+'">הורד את הקובץ</a></p>');w.document.close();}},
+    dl:function(k,i){var f=(store()[k]||[])[i];if(!f)return;if(window.MiflasViewer){MiflasViewer.download(f);return;}var a=document.createElement('a');a.href=f.data;a.download=f.name;a.click();},
     del:function(k,i){if(!confirm('למחוק את הקובץ? הוא יימחק גם מתיק הפרויקט בצד התכנון.'))return;var st=store();(st[k]||[]).splice(i,1);save(st);rer();}
   };
 })();
@@ -44805,6 +44963,58 @@ window.pdfEditorInit = function(){ PDFED.pdfEditorInit(); };
     snooze:function(k,n){var P=pid(),SZ=J('exec_snooze_'+P,{}),d=t0();d.setDate(d.getDate()+n);SZ[k]=iso(d);W('exec_snooze_'+P,SZ);if(window.showToast)showToast('הפריט יחזור ב-'+he(d));rer();},
     unsnoozeAll:function(){W('exec_snooze_'+pid(),{});rer();},
     all:function(){SHOW_ALL=!SHOW_ALL;rer();}};
+})();
+
+</script>
+<!-- ═══ מציג קבצים פנימי (תוספת בלבד) ═══ -->
+<style id="mv-css">
+#mvOverlay{position:fixed;inset:0;z-index:4000;background:rgba(18,28,30,.92);display:flex;flex-direction:column;font-family:inherit}
+#mvOverlay .mv-bar{display:flex;align-items:center;gap:6px;padding:10px 14px;background:#1B3A3D;color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.3);flex-wrap:wrap;padding-top:max(10px,env(safe-area-inset-top))}
+#mvOverlay .mv-t{flex:1;min-width:140px;display:flex;flex-direction:column}#mvOverlay .mv-t b{font-size:14px;unicode-bidi:plaintext;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#mvOverlay .mv-t span{font-size:11px;opacity:.7}
+#mvOverlay .mv-bar button{font-family:inherit;font-size:13px;font-weight:700;color:#fff;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:8px 12px;cursor:pointer;min-width:38px}
+#mvOverlay .mv-bar button.pri{background:#C9A84C;border-color:#C9A84C;color:#1a1200}#mvOverlay .mv-bar button.x{background:transparent;border-color:transparent;font-size:18px}
+#mvOverlay .mv-body{flex:1;overflow:auto;padding:16px 12px 40px;display:flex;flex-direction:column;align-items:center;gap:6px;-webkit-overflow-scrolling:touch}
+#mvOverlay .mv-page{background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.4);border-radius:2px;max-width:none}
+#mvOverlay .mv-pn{color:rgba(255,255,255,.6);font-size:11px;margin:0 0 12px}
+#mvOverlay .mv-img{max-width:100%;height:auto;background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.4)}
+#mvOverlay .mv-load{color:#fff;font-size:14px;margin-top:40px;text-align:center;max-width:420px}
+</style>
+
+<script>
+/* ═══ מציג קבצים פנימי (PDF/תמונה) — במקום לשונית חיצונית שהדפדפן חוסם ═══ */
+(function(){
+  function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function toBlob(dataUrl, type){ var i=dataUrl.indexOf(','), meta=dataUrl.slice(0,i), b64=meta.indexOf(';base64')>=0, raw=dataUrl.slice(i+1), bin=b64?atob(raw):decodeURIComponent(raw), u=new Uint8Array(bin.length); for(var k=0;k<bin.length;k++) u[k]=bin.charCodeAt(k); return new Blob([u], {type: type || (meta.split(':')[1]||'').split(';')[0] || 'application/octet-stream'}); }
+  function isPdf(f){ return /pdf/i.test(f.type||'') || /\.pdf$/i.test(f.name||''); }
+  function isImg(f){ return /^image\//i.test(f.type||'') || /\.(png|jpe?g|gif|webp)$/i.test(f.name||''); }
+  function ensureWorker(lib){ try{ if(!lib.GlobalWorkerOptions.workerSrc && typeof PDFEDITOR_WORKER_B64!=='undefined'){ var c=atob(PDFEDITOR_WORKER_B64), u=new Uint8Array(c.length); for(var i=0;i<c.length;i++) u[i]=c.charCodeAt(i); lib.GlobalWorkerOptions.workerSrc=URL.createObjectURL(new Blob([u],{type:'application/javascript'})); } }catch(e){} }
+  var CUR=null, SCALE=1, DOC=null;
+  function download(f){ if(!f||!f.data) return; var bl=toBlob(f.data, f.type), url=URL.createObjectURL(bl), a=document.createElement('a'); a.href=url; a.download=f.name||'קובץ'; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 4000); if(window.showToast) showToast('⬇ ההורדה התחילה — באייפד: בחלון שנפתח בחר "שמור בקבצים"'); }
+  async function share(f){ if(!f||!f.data) return; var bl=toBlob(f.data, f.type); try{ var file=new File([bl], f.name||'קובץ', {type:bl.type}); if(navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file], title:f.name}); return; } }catch(e){ if(e&&e.name==='AbortError') return; } download(f); }
+  function openInEditor(f){ if(!f||!f.data) return; var bl=toBlob(f.data, 'application/pdf'); close(); if(typeof showPage==='function') showPage('pdfeditor');
+    bl.arrayBuffer().then(function(buf){ var go=function(){ if(window.PDFED && PDFED.openBytes){ PDFED.openBytes(f.name, new Uint8Array(buf), f.origin||null); } else setTimeout(go, 150); }; setTimeout(go, 200); }); }
+  function close(){ var o=document.getElementById('mvOverlay'); if(o){ o.remove(); } CUR=null; DOC=null; document.removeEventListener('keydown', onKey); }
+  function onKey(e){ if(e.key==='Escape') close(); }
+  async function renderPdf(){ var host=document.getElementById('mvPages'); if(!host||!CUR) return; host.innerHTML='<div class="mv-load">טוען…</div>';
+    try{ var lib=window.pdfjsLib; ensureWorker(lib); if(!DOC){ var bl=toBlob(CUR.data,'application/pdf'); var buf=new Uint8Array(await bl.arrayBuffer()); DOC=await lib.getDocument({data:buf, standardFontDataUrl:'https://unpkg.com/pdfjs-dist@3.11.174/standard_fonts/', disableFontFace:true}).promise; }
+      document.getElementById('mvInfo').textContent = DOC.numPages+' עמודים'; host.innerHTML='';
+      var avail=Math.min(host.clientWidth-24, 1100);
+      for(var p=1;p<=DOC.numPages;p++){ if(!CUR) return; var page=await DOC.getPage(p), vp0=page.getViewport({scale:1}), s=(avail/vp0.width)*SCALE, dpr=Math.min(window.devicePixelRatio||1,2), vp=page.getViewport({scale:s*dpr});
+        var c=document.createElement('canvas'); c.width=vp.width; c.height=vp.height; c.style.width=(vp.width/dpr)+'px'; c.style.height=(vp.height/dpr)+'px'; c.className='mv-page'; host.appendChild(c);
+        var lbl=document.createElement('div'); lbl.className='mv-pn'; lbl.textContent='עמוד '+p+' מתוך '+DOC.numPages; host.appendChild(lbl);
+        await page.render({canvasContext:c.getContext('2d'), viewport:vp}).promise; }
+    }catch(e){ host.innerHTML='<div class="mv-load">לא ניתן להציג את הקובץ ('+esc(e.message)+'). אפשר להוריד אותו.</div>'; } }
+  function open(f){ if(!f||!f.data){ if(window.showToast) showToast('⚠️ הקובץ ריק או לא נשמר'); return; } close(); CUR=f; SCALE=1; DOC=null;
+    var o=document.createElement('div'); o.id='mvOverlay';
+    var pdf=isPdf(f), img=isImg(f);
+    o.innerHTML='<div class="mv-bar"><div class="mv-t"><b>'+esc(f.name)+'</b><span id="mvInfo">'+(f.size||'')+'</span></div>'
+      +(pdf?'<button onclick="MiflasViewer.zoom(-1)" title="הקטן">−</button><button onclick="MiflasViewer.zoom(1)" title="הגדל">+</button>':'')
+      +'<button onclick="MiflasViewer.dl()">⬇ הורד</button><button onclick="MiflasViewer.share()">📤 שתף</button>'
+      +(pdf?'<button class="pri" onclick="MiflasViewer.edit()">✏️ פתח בעורך</button>':'')+'<button class="x" onclick="MiflasViewer.close()">✕</button></div>'
+      +'<div class="mv-body" id="mvPages">'+(img?'<img class="mv-img" src="'+f.data+'">':(pdf?'':'<div class="mv-load">אין תצוגה מקדימה לסוג הקובץ הזה. אפשר להוריד או לשתף אותו.</div>'))+'</div>';
+    document.body.appendChild(o); document.addEventListener('keydown', onKey);
+    if(pdf) renderPdf(); }
+  window.MiflasViewer={open:open, close:close, dl:function(){ download(CUR); }, share:function(){ share(CUR); }, edit:function(){ openInEditor(CUR); }, zoom:function(d){ SCALE=Math.max(0.5, Math.min(3, SCALE+(d>0?0.25:-0.25))); renderPdf(); }, download:download, toBlob:toBlob};
 })();
 
 </script>
