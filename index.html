@@ -46124,6 +46124,13 @@ window.pdfEditorInit = function(){ PDFED.pdfEditorInit(); };
   body.sidebar-collapsed .sidebar-logo{padding-top:54px !important}
 }
 /* תווית צפה בריחוף על אייקון */
+
+/* כפתור פתיחה במצב מוסתר — לשונית בקצה המסך (לא מתחת לשורת הסטטוס, לא מעל הכותרת) */
+@media (min-width: 769px){
+  body.sidebar-hidden #sidebar-restore-btn{display:flex !important;position:fixed !important;top:50% !important;right:0 !important;left:auto !important;transform:translateY(-50%);width:26px !important;height:84px !important;border-radius:14px 0 0 14px !important;z-index:5000 !important;padding:0 !important;box-shadow:-3px 0 14px rgba(0,0,0,.18) !important;touch-action:manipulation}
+  body.sidebar-hidden #sidebar-restore-btn::before{content:'';position:absolute;top:-16px;bottom:-16px;right:0;left:-22px}
+  body.sidebar-hidden #sidebar-restore-btn svg{width:16px !important;height:16px !important}
+}
 #sbTip{position:fixed;z-index:9999;pointer-events:none;background:#1E2A2A;color:#fff;font-size:12.5px;font-weight:700;padding:6px 10px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.25);opacity:0;transform:translateX(6px);transition:opacity .12s,transform .12s;white-space:nowrap;font-family:inherit}
 #sbTip.on{opacity:1;transform:translateX(0)}
 </style>
@@ -46142,6 +46149,15 @@ window.pdfEditorInit = function(){ PDFED.pdfEditorInit(); };
   function hide(){ if(tip) tip.classList.remove('on'); }
   document.addEventListener('mouseover', show); document.addEventListener('mouseout', function(e){ if(e.target.closest && e.target.closest('.sidebar .nav-item')) hide(); });
   document.addEventListener('click', hide, true);
+
+  /* פתיחה אמינה במגע + החלקה מקצה המסך */
+  function restore(){ var rb=document.getElementById('sidebar-restore-btn'); if(rb) rb.click(); }
+  function wire(){ var rb=document.getElementById('sidebar-restore-btn'); if(rb && !rb.__t){ rb.__t=1; rb.innerHTML='<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>'; rb.title='פתח סרגל צד';
+      rb.addEventListener('touchend', function(e){ e.preventDefault(); e.stopPropagation(); rb.click(); }, {passive:false}); } }
+  setInterval(wire, 1000); wire();
+  var sx=null, sy=null;
+  document.addEventListener('touchstart', function(e){ if(!document.body.classList.contains('sidebar-hidden')) return; var t=e.touches[0]; if(t && t.clientX > window.innerWidth-28){ sx=t.clientX; sy=t.clientY; } else sx=null; }, {passive:true});
+  document.addEventListener('touchmove', function(e){ if(sx===null) return; var t=e.touches[0]; if(sx - t.clientX > 40 && Math.abs(t.clientY-sy) < 60){ sx=null; restore(); } }, {passive:true});
   if(document.readyState!=='loading') setTimeout(tag,300); else document.addEventListener('DOMContentLoaded', function(){ setTimeout(tag,300); });
   new MutationObserver(function(){ clearTimeout(window.__sbT); window.__sbT=setTimeout(tag,200); }).observe(document.documentElement,{childList:true,subtree:true});
 })();
