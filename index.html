@@ -26717,7 +26717,7 @@ ${ai ? `\n✅ כולל: סיכום + ${ai.keyPoints.length} נקודות + ${ai.
       btn.id = 'sidebar-toggle-btn';
       btn.title = '\u05de\u05d6\u05e2\u05d5\u05e8 / \u05d4\u05e1\u05ea\u05e8\u05d4 \u05e9\u05dc \u05e1\u05e8\u05d2\u05dc \u05e6\u05d3';
       btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>';
-      btn.onclick = function(){ if (typeof toggleSidebar === 'function') toggleSidebar(); };
+      btn.onclick = function(){ if (window._themeEngine && window._themeEngine.toggleSidebar && window.innerWidth > 768) window._themeEngine.toggleSidebar(); else if (typeof toggleSidebar === 'function') toggleSidebar(); };
       nav.appendChild(btn);
     } catch(e){}
   }
@@ -46097,6 +46097,54 @@ window.pdfEditorInit = function(){ PDFED.pdfEditorInit(); };
   };
 })();
 
+</script>
+<!-- ═══ סיידבר ממוזער — אייקונים בלבד, מסודר (תיקון) ═══ -->
+<style id="sb-collapse-fix">
+@media (min-width: 769px){
+  body.sidebar-collapsed .sidebar{width:72px !important;min-width:72px !important;overflow-x:hidden !important}
+  body.sidebar-collapsed .main{margin-right:72px !important}
+  body.sidebar-collapsed .sidebar .nav-item{font-size:0 !important;justify-content:center !important;align-items:center !important;padding:6px 0 !important;margin:2px 10px !important;gap:0 !important;min-height:44px;border-radius:12px !important;position:relative;white-space:nowrap;overflow:hidden}
+  body.sidebar-collapsed .sidebar .nav-item .nav-icon{font-size:16px !important;margin:0 !important;width:38px !important;height:38px !important;min-width:38px;display:inline-flex !important;align-items:center;justify-content:center;border-radius:10px}
+  body.sidebar-collapsed .sidebar .nav-item .nav-icon svg{width:19px !important;height:19px !important}
+  body.sidebar-collapsed .sidebar .nav-item.active{box-shadow:none !important}
+  body.sidebar-collapsed .sidebar .nav-item.active::after{content:'';position:absolute;right:-10px;top:10px;bottom:10px;width:3px;border-radius:3px;background:#C9A84C}
+  body.sidebar-collapsed .sidebar-logo{padding:16px 0 10px !important;display:flex !important;justify-content:center}
+  body.sidebar-collapsed .sidebar-logo > *:not(.sidebar-logo-icon){display:none !important}
+  body.sidebar-collapsed .sidebar-logo .sidebar-logo-icon{margin:0 auto !important}
+  body.sidebar-collapsed .sidebar-section{padding:4px 0 !important;margin:0 !important;border-top:1px solid rgba(255,255,255,.07)}
+  body.sidebar-collapsed .sidebar-section:first-of-type{border-top:none}
+  body.sidebar-collapsed .sidebar-footer{display:none !important}
+  body.sidebar-collapsed #v57-badge{display:none !important}
+  body.sidebar-collapsed .sb-mode{padding:6px 10px 10px !important;margin:0 !important}
+  body.sidebar-collapsed .sb-mode-row{flex-direction:column !important}
+  body.sidebar-collapsed .sb-mode-btn{font-size:0 !important;padding:7px 0 !important;line-height:1;border-right:none !important}
+  body.sidebar-collapsed .sb-mode-btn + .sb-mode-btn{border-top:1px solid var(--border2) !important}
+  body.sidebar-collapsed .sb-mode-btn::before{content:attr(data-short);font-size:10px;font-weight:800}
+  body.sidebar-collapsed #sidebar-toggle-btn{left:50% !important;right:auto !important;transform:translateX(-50%);top:12px !important}
+  body.sidebar-collapsed .sidebar-logo{padding-top:54px !important}
+}
+/* תווית צפה בריחוף על אייקון */
+#sbTip{position:fixed;z-index:9999;pointer-events:none;background:#1E2A2A;color:#fff;font-size:12.5px;font-weight:700;padding:6px 10px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.25);opacity:0;transform:translateX(6px);transition:opacity .12s,transform .12s;white-space:nowrap;font-family:inherit}
+#sbTip.on{opacity:1;transform:translateX(0)}
+</style>
+<script>
+(function(){
+  function tag(){
+    var sb=document.querySelector('.sidebar'); if(!sb) return;
+    sb.querySelectorAll('.nav-item').forEach(function(it){ if(!it.getAttribute('data-tip')){ var c=it.cloneNode(true); c.querySelectorAll('.nav-badge').forEach(function(x){ x.remove(); }); var t=(c.textContent||'').replace(/\s+/g,' ').trim(); it.setAttribute('data-tip', t); it.setAttribute('aria-label', t); } });
+    Array.prototype.forEach.call(sb.children, function(d){ if(!d.classList.contains('sb-mode') && /תכנון ורישוי/.test(d.textContent||'') && /ביצוע/.test(d.textContent||'') && !d.classList.contains('sidebar-section')){ d.classList.add('sb-mode');
+      var row=d.firstElementChild; if(row) row.classList.add('sb-mode-row'); Array.prototype.forEach.call(row?row.children:[], function(b){ var t=(b.textContent||'').trim(); b.classList.add('sb-mode-btn'); b.setAttribute('data-short', /תכנון/.test(t)?'תכנון':/ביצוע/.test(t)?'ביצוע':t.slice(0,5)); }); } });
+  }
+  var tip=null;
+  function show(e){ if(!document.body.classList.contains('sidebar-collapsed')) return; var it=e.target.closest && e.target.closest('.sidebar .nav-item'); if(!it) return;
+    if(!tip){ tip=document.createElement('div'); tip.id='sbTip'; document.body.appendChild(tip); }
+    var r=it.getBoundingClientRect(); tip.textContent=it.getAttribute('data-tip')||''; tip.style.top=(r.top+r.height/2-15)+'px'; tip.style.right=(window.innerWidth-r.left+8)+'px'; tip.classList.add('on'); }
+  function hide(){ if(tip) tip.classList.remove('on'); }
+  document.addEventListener('mouseover', show); document.addEventListener('mouseout', function(e){ if(e.target.closest && e.target.closest('.sidebar .nav-item')) hide(); });
+  document.addEventListener('click', hide, true);
+  if(document.readyState!=='loading') setTimeout(tag,300); else document.addEventListener('DOMContentLoaded', function(){ setTimeout(tag,300); });
+  new MutationObserver(function(){ clearTimeout(window.__sbT); window.__sbT=setTimeout(tag,200); }).observe(document.documentElement,{childList:true,subtree:true});
+})();
 </script>
 </body>
 </html>
