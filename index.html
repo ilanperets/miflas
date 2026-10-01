@@ -38638,9 +38638,11 @@ select.c{font-family:inherit;font-size:12.5px;font-weight:600;border:1px solid v
     var projOpts = projs.length ? projs.map(function(p){ return '<option value="'+esc(p.id)+'"'+(String(p.id)===String(state.pid)?' selected':'')+'>'+esc(p.name||('פרויקט '+p.id))+'</option>'; }).join('') : '<option value="">— אין פרויקטים —</option>';
     var finOpts = Object.keys(FINISH).map(function(k){ return '<option value="'+esc(k)+'"'+(k===m.finish?' selected':'')+'>'+esc(k)+'</option>'; }).join('');
 
+    if(m.mode==='zones' && window.__estZ){ try{ window.__estZ.render(panel, projOpts); return; }catch(e){ console.error('[estZ]', e); } }
     panel.innerHTML =
       '<div class="etop"><div class="ebrand"><div class="ebar"></div><div><h2>בניית אומדן <span class="d">·</span> אומדן ראשוני לפרויקט</h2><div class="esub">לפי מ"ר · פירוט עבודה · מפל תוספות · מע"מ</div></div></div>'
       + '<div><span class="esaved" id="estbSaved"></span><button class="ebtn" onclick="window._estb.exportPdf()" style="margin-left:8px">📄 PDF</button><button class="ebtn pri" onclick="window._estb.exportXlsx()">⭳ ייצוא ל-Excel</button></div></div>'
+      + (window.__estZ ? window.__estZ.modeBar('sqm') : '')
       + '<div class="eproj"><label>פרויקט:</label><div style="min-width:220px"><select id="estbProj" onchange="window._estb.onProj(this.value)">'+projOpts+'</select></div><button class="ebtn" onclick="window._estb.clearAll()" style="margin-right:auto;color:#B0431F;border-color:#F0C2AE">🧹 נקה הכל</button><button class="ebtn" onclick="window._estb.openGlobalModal()">⚙️ הגדרות גלובליות</button></div>'
       + '<div class="egrid"><div>'
       +   '<div class="ecard"><div class="eph"><span class="estep">1</span>בסיס האומדן — סוג מבנה</div>'
@@ -38770,6 +38772,8 @@ select.c{font-family:inherit;font-size:12.5px;font-weight:600;border:1px solid v
 
   window._estb={
     setTab:setTab,
+    __ctx:function(){ return {state:state, save:saveEst, render:renderPanel}; },
+    setMode:function(md){ if(!state.model) return; state.model.mode=md; saveEst(); renderPanel(); },
     onProj:function(pid){ saveEst(); state.pid=(pid===''?null:pid); state.model=(state.pid!=null?(loadEst(state.pid)||defaultModel()):defaultModel()); renderPanel(); },
     onType:function(){ onType(false); },
     set:function(path,val){ if(path==='finish'){ var s=document.getElementById('estbFinish'); state.model.finish=s?s.value:val; } else { state.model[path]=val; } calc(); saveEst(); },
@@ -45015,6 +45019,498 @@ window.pdfEditorInit = function(){ PDFED.pdfEditorInit(); };
     document.body.appendChild(o); document.addEventListener('keydown', onKey);
     if(pdf) renderPdf(); }
   window.MiflasViewer={open:open, close:close, dl:function(){ download(CUR); }, share:function(){ share(CUR); }, edit:function(){ openInEditor(CUR); }, zoom:function(d){ SCALE=Math.max(0.5, Math.min(3, SCALE+(d>0?0.25:-0.25))); renderPdf(); }, download:download, toBlob:toBlob};
+})();
+
+</script>
+<!-- ═══ אומדן לפי מתחמים ומקצועות (תוספת בלבד) ═══ -->
+<style id="estz-css">
+#estbPanel .etop>div:last-child{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#estbPanel .ezm{display:inline-flex;gap:4px;background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:4px;margin:4px 0 14px}
+#estbPanel .ezm button{font-family:inherit;font-size:12.5px;font-weight:700;border:none;background:transparent;color:var(--text2);padding:8px 14px;border-radius:7px;cursor:pointer}
+#estbPanel .ezm button.on{background:var(--surface);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.1)}
+#estbPanel .ezk{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px}
+#estbPanel .ezk>div{background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:12px 14px}
+#estbPanel .ezk span{display:block;font-size:10.5px;color:var(--text3);font-weight:700}#estbPanel .ezk b{font-size:18px;color:var(--text)}
+#estbPanel .ezk>div:first-child{border-color:#C9A84C;background:linear-gradient(180deg,rgba(201,168,76,.08),transparent)}#estbPanel .ezk>div:first-child b{color:#8a6a2d}
+#estbPanel .ezg{grid-template-columns:1fr 1.4fr}
+#estbPanel .ezchips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+#estbPanel .ezchip{display:inline-flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:2px 4px 2px 8px}
+#estbPanel .ezchip input{border:none;background:transparent;font-family:inherit;font-size:12.5px;font-weight:700;color:var(--text);outline:none;padding:4px 0;min-width:40px}
+#estbPanel .ezchip i{font-style:normal;font-size:11px;color:var(--text3);cursor:pointer;padding:2px 4px}#estbPanel .ezchip i:hover{color:#B0431F}
+#estbPanel .ezt input{width:100%;border:1px solid transparent;background:transparent;font-family:inherit;font-size:12.5px;padding:6px;border-radius:6px;color:var(--text)}
+#estbPanel .ezt input:hover{border-color:var(--border2)}#estbPanel .ezt input:focus{border-color:#C9A84C;background:var(--surface);outline:none}
+#estbPanel .ezact{white-space:nowrap}#estbPanel .ezact i{font-style:normal;cursor:pointer;color:var(--text3);padding:3px 5px;font-size:12px}#estbPanel .ezact i:hover{color:var(--text)}
+#estbPanel .ezhint{margin-right:auto;font-size:10.5px;font-weight:500;color:var(--text3)}
+#estbPanel .ezmx{overflow-x:auto;border:1px solid var(--border2);border-radius:10px;width:0;min-width:100%;box-sizing:border-box}
+#estbPanel .ezmx table{border-collapse:separate;border-spacing:0;min-width:100%;font-size:12px}
+#estbPanel .ezmx th{background:#1F4E78;color:#fff;font-weight:700;padding:9px 8px;white-space:nowrap;position:sticky;top:0;z-index:1;font-size:11.5px;border-left:1px solid rgba(255,255,255,.15)}
+#estbPanel .ezmx th.s,#estbPanel .ezmx td.s{position:sticky;right:0;z-index:2;min-width:190px;max-width:260px;text-align:right}
+#estbPanel .ezmx th.s{z-index:3}
+#estbPanel .ezmx td{border-bottom:1px solid var(--border2);border-left:1px solid var(--border2);padding:4px 6px;text-align:left;white-space:nowrap;background:var(--surface)}
+#estbPanel .ezmx td.s{background:var(--surface);white-space:normal;padding:7px 10px}
+#estbPanel .ezmx td.a{color:var(--text2);font-size:11.5px}
+#estbPanel .ezmx td.t,#estbPanel .ezmx th.t{font-weight:800;background:#FFF8E6;color:#6b5320}#estbPanel .ezmx th.t{background:#8a6a2d;color:#fff}
+#estbPanel .ezmx tr.st td{background:#DDEBF7;font-weight:800;color:#1F4E78}#estbPanel .ezmx tr.st td.s em{font-style:normal;font-weight:500;font-size:10.5px;margin-right:6px;color:#4c6a88}
+#estbPanel .ezmx td.c{position:relative;min-width:118px}
+#estbPanel .ezmx td.c input{width:100%;border:1px solid transparent;background:transparent;text-align:left;font-size:12.5px;padding:6px 18px 6px 4px;border-radius:5px;color:var(--text)}
+#estbPanel .ezmx td.c input:hover{border-color:var(--border2)}#estbPanel .ezmx td.c input:focus{border-color:#C9A84C;background:#fff;outline:none}
+#estbPanel .ezmx .ezdot{position:absolute;right:3px;top:50%;transform:translateY(-50%);font-style:normal;cursor:pointer;color:var(--text3);font-weight:900;font-size:13px;padding:0 3px;border-radius:4px}
+#estbPanel .ezmx td.c.has .ezdot{color:#fff;background:#C9A84C}
+#estbPanel .ezmx .ezr{display:block;cursor:pointer;padding:3px 18px 3px 4px;font-weight:700}#estbPanel .ezmx .ezr small{display:block;font-weight:500;font-size:10px;color:var(--text3)}
+#estbPanel .ezmx td.na{color:var(--text3);font-size:10.5px;text-align:center;background:repeating-linear-gradient(45deg,var(--surface2),var(--surface2) 4px,var(--surface) 4px,var(--surface) 8px);cursor:pointer}
+#estbPanel .ezmx .ezn{font-size:10.5px;color:var(--text3);margin-top:2px;white-space:normal}
+#estbPanel .ezmx tfoot td{background:#FFF2CC;font-weight:800;border-top:2px solid #8a6a2d}#estbPanel .ezmx tfoot td small{display:block;font-weight:600;font-size:10px;color:#8a6a2d}
+#estbPanel .ezbars{display:flex;flex-direction:column;gap:8px}
+#estbPanel .ezb{display:grid;grid-template-columns:130px 1fr 110px 40px;gap:8px;align-items:center;font-size:12px}
+#estbPanel .ezb>div{height:10px;background:var(--surface2);border-radius:5px;overflow:hidden}#estbPanel .ezb>div i{display:block;height:100%;background:linear-gradient(90deg,#1F4E78,#3d7ab3);border-radius:5px}
+#estbPanel .ezb b{text-align:left}#estbPanel .ezb em{font-style:normal;color:var(--text3);font-size:11px}
+#estbPanel .ezpop{position:fixed;inset:0;background:rgba(20,30,32,.45);z-index:1200;display:flex;align-items:center;justify-content:center;padding:16px}
+#estbPanel .ezpb{background:var(--surface);border-radius:14px;padding:16px 18px;width:min(440px,100%);box-shadow:0 20px 50px rgba(0,0,0,.3);display:flex;flex-direction:column;gap:10px}
+#estbPanel .ezph{display:flex;justify-content:space-between;align-items:center;font-size:14px}#estbPanel .ezph i{font-style:normal;cursor:pointer;color:var(--text3)}
+#estbPanel .ezseg{display:flex;gap:4px;background:var(--surface2);padding:4px;border-radius:9px}
+#estbPanel .ezseg button{flex:1;font-family:inherit;font-size:11.5px;font-weight:700;border:none;background:transparent;padding:8px 6px;border-radius:7px;cursor:pointer;color:var(--text2)}
+#estbPanel .ezseg button.on{background:#1F4E78;color:#fff}
+#estbPanel .ezpb label{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:700;color:var(--text2)}
+#estbPanel .ezpb input,#estbPanel .ezpb textarea{font-family:inherit;font-size:13px;border:1px solid var(--border2);border-radius:8px;padding:8px 10px;background:var(--surface2);color:var(--text)}
+#estbPanel .ezpb textarea{min-height:64px;resize:vertical}
+@media(max-width:1000px){#estbPanel .ezk{grid-template-columns:repeat(2,1fr)}#estbPanel .ezg{grid-template-columns:1fr}}
+
+/* ── הדגשת שדות למילוי בכל דשבורד האומדנים ── */
+#page-budget input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]):not([type=color]):not(.dhn),#page-budget select,#page-budget textarea{background:#FFFBEA !important;border:1.5px solid #E6CF85 !important;border-radius:7px}
+#page-budget input:not([type=checkbox]):not([type=file]):hover,#page-budget select:hover{border-color:#C9A84C !important}
+#page-budget input:not([type=checkbox]):not([type=file]):focus,#page-budget select:focus,#page-budget textarea:focus{background:#fff !important;border-color:#1F4E78 !important;box-shadow:0 0 0 3px rgba(31,78,120,.14) !important;outline:none}
+#estbPanel .ezmx td.c input,#estbPanel .ezmx td.s input,#estbPanel .ezmx td.a input{border:1.5px solid #EADBA4 !important;background:#FFFBEA !important}
+#estbPanel .ezmx th input{background:rgba(255,255,255,.12) !important;border:1px dashed rgba(255,255,255,.35) !important;color:#fff !important;font-weight:700;text-align:center;width:100%;font-family:inherit;font-size:11.5px;padding:5px 4px;border-radius:6px;min-width:84px}
+#estbPanel .ezmx th input:focus{background:#fff !important;color:#1F4E78 !important;border-style:solid !important}
+.ezlegend{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--text2);margin:0 10px 14px}.ezlegend i{width:16px;height:12px;border-radius:3px;background:#FFFBEA;border:1.5px solid #E6CF85;display:inline-block}
+#estbPanel .etop .ebtn[disabled]{opacity:.4;cursor:default}
+#estbPanel .eztools{margin-right:auto;display:flex;gap:6px;flex-wrap:wrap}
+#estbPanel .eztools button{font-family:inherit;font-size:12px;font-weight:700;background:#1F4E78;color:#fff;border:none;border-radius:7px;padding:7px 12px;cursor:pointer}
+#estbPanel .eztools select{font-size:12px;padding:6px 8px;font-family:inherit}
+#estbPanel .ezmx th.dh{min-width:120px;padding:6px 6px 4px}
+#estbPanel .ezmx .dha{display:flex;justify-content:center;gap:2px;margin-top:3px}
+#estbPanel .ezmx .dha i,#estbPanel .ezmx td.ac i{font-style:normal;cursor:pointer;font-size:12px;padding:1px 5px;border-radius:4px;opacity:.75}
+#estbPanel .ezmx .dha i:hover,#estbPanel .ezmx td.ac i:hover{opacity:1;background:rgba(255,255,255,.2)}
+#estbPanel .ezmx .dha i.x:hover{background:#C0492B;color:#fff}
+#estbPanel .ezmx th.add,#estbPanel .ezmx td.add{width:34px;min-width:34px;padding:0;background:transparent !important;border-left:none}
+#estbPanel .ezmx th.add{background:#1F4E78 !important}
+#estbPanel .ezmx th.add button{width:28px;height:28px;border-radius:50%;border:1.5px dashed rgba(255,255,255,.6);background:transparent;color:#fff;font-size:17px;cursor:pointer}
+#estbPanel .ezmx th.ac,#estbPanel .ezmx td.ac{width:58px;min-width:58px;text-align:center;white-space:nowrap}
+#estbPanel .ezmx td.ac i{color:var(--text3)}#estbPanel .ezmx td.ac i.x:hover{background:#FBE3DA;color:#B0431F}
+#estbPanel .ezmx tr.st td.s .stw{display:flex;align-items:center;gap:6px}
+#estbPanel .ezmx tr.st td.s .tg{font-style:normal;cursor:pointer;width:18px;text-align:center}
+#estbPanel .ezmx tr.st td.s input{font-weight:800;color:#1F4E78;font-size:12.5px;width:120px;padding:5px 7px;border-radius:6px;font-family:inherit}
+#estbPanel .ezmx tr.st td.s em{font-style:normal;font-weight:500;font-size:10.5px;color:#4c6a88;white-space:nowrap}
+#estbPanel .ezmx td.s input.zn{width:100%;font-weight:700;font-size:12.5px;padding:6px 8px;border-radius:6px;font-family:inherit;color:var(--text)}
+#estbPanel .ezmx td.s input.znote{width:100%;font-size:10.5px;padding:3px 8px;margin-top:3px;border-radius:5px;font-family:inherit;color:var(--text2);background:transparent !important;border:1px dashed var(--border2) !important}
+#estbPanel .ezmx td.a input.ar{width:70px;text-align:center;font-size:12px;padding:6px 4px;border-radius:6px}
+#estbPanel .ezmx tr.addz td{background:transparent !important;border-bottom:1px solid var(--border2);padding:4px 10px;text-align:right}
+#estbPanel .ezmx tr.addz button{font-family:inherit;font-size:11.5px;font-weight:700;color:#1F4E78;background:transparent;border:1.5px dashed #9FB8CF;border-radius:6px;padding:4px 12px;cursor:pointer}
+#estbPanel .ezmx tr.addz button:hover{background:#EEF4FA}
+#estbPanel .ezstart-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin-bottom:10px}
+#estbPanel .ezstart-g button,#estbPanel .ezstart-g label{font-family:inherit;text-align:right;display:flex;flex-direction:column;gap:5px;padding:14px;border:1.5px solid var(--border2);border-radius:10px;background:var(--surface);cursor:pointer}
+#estbPanel .ezstart-g button:hover,#estbPanel .ezstart-g label:hover{border-color:#1F4E78;box-shadow:0 4px 14px rgba(31,78,120,.12)}
+#estbPanel .ezstart-g b{font-size:13.5px;color:var(--text)}#estbPanel .ezstart-g span{font-size:11px;color:var(--text3);line-height:1.5}
+
+/* ── מסגרות מקצועיות לכרטיסים ולטבלאות ── */
+#estbPanel .ecard{border:1px solid #D5DEE7 !important;box-shadow:0 1px 2px rgba(16,40,64,.04),0 6px 18px rgba(16,40,64,.06) !important;border-radius:14px !important}
+#estbPanel .ecard>.eph{border-bottom:1px solid #E4EAF0;padding-bottom:12px;margin-bottom:14px}
+#estbPanel .ezcard{border-top:3px solid #1F4E78 !important}
+#estbPanel .ezmx,#estbPanel .ezdt{border:1.5px solid #B9C8D6 !important;border-radius:12px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.6),0 4px 14px rgba(31,78,120,.08);background:#fff}
+#estbPanel .ezmx thead th{background:linear-gradient(180deg,#24598A,#1F4E78) !important;border-bottom:2px solid #163A5A}
+#estbPanel .ezmx thead th:first-child{border-top-right-radius:10px}
+#estbPanel .ezmx tbody tr:not(.st):not(.addz):hover td{background:#F6F9FC}
+#estbPanel .ezmx tr.st td{border-top:1.5px solid #B9C8D6;box-shadow:inset -4px 0 0 #1F4E78}
+#estbPanel .ezmx tr.st td:not(.s){box-shadow:none}
+#estbPanel .ezmx tfoot td{border-top:2.5px double #8a6a2d !important}
+#estbPanel .etbl{border:1.5px solid #D5DEE7;border-radius:10px;overflow:hidden;border-collapse:separate;border-spacing:0}
+#estbPanel .etbl thead th{background:#F1F5F9;border-bottom:1.5px solid #D5DEE7;color:#1F4E78}
+#estbPanel .ewf{border:1.5px solid #D5DEE7;border-radius:10px;padding:6px 12px}
+#estbPanel .ezk>div{box-shadow:0 1px 2px rgba(16,40,64,.04),0 4px 12px rgba(16,40,64,.05);border-color:#D5DEE7}
+#estbPanel .ezview{display:inline-flex;gap:3px;background:#EEF3F8;border:1px solid #D5DEE7;border-radius:9px;padding:3px;margin-right:14px}
+#estbPanel .ezview button{font-family:inherit;font-size:12px;font-weight:700;border:none;background:transparent;color:#4c6a88;padding:6px 12px;border-radius:7px;cursor:pointer}
+#estbPanel .ezview button.on{background:#fff;color:#1F4E78;box-shadow:0 1px 4px rgba(0,0,0,.1)}
+#estbPanel .ezr.it small{color:#1F4E78;font-weight:700}
+#estbPanel .ezpb.wide{width:min(820px,100%)}
+#estbPanel .ezit table{width:100%;border-collapse:separate;border-spacing:0;border:1.5px solid #B9C8D6;border-radius:10px;overflow:hidden;font-size:12.5px}
+#estbPanel .ezit th{background:#1F4E78;color:#fff;font-weight:700;padding:8px 6px;font-size:11.5px}
+#estbPanel .ezit td{border-bottom:1px solid #E4EAF0;padding:4px 5px}
+#estbPanel .ezit td input{width:100%;box-sizing:border-box;font-family:inherit;font-size:12.5px;padding:6px 7px;border-radius:6px}
+#estbPanel .ezit td.tot{font-weight:800;text-align:left;color:#1F4E78}
+#estbPanel .ezit td i{font-style:normal;cursor:pointer;color:#9aa8b5}#estbPanel .ezit td i:hover{color:#B0431F}
+#estbPanel .ezit tfoot td{background:#FFF2CC;font-weight:800;border-top:2px solid #8a6a2d}
+#estbPanel .ezsg{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:10px;font-size:11.5px;color:var(--text3)}
+#estbPanel .ezsg button{font-family:inherit;font-size:11.5px;font-weight:600;border:1px dashed #9FB8CF;background:#F4F8FC;color:#1F4E78;border-radius:14px;padding:4px 10px;cursor:pointer}
+#estbPanel .ezsg button:hover{background:#E4EEF7;border-style:solid}
+#estbPanel .ezpk{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;max-height:52vh;overflow:auto;padding:2px}
+#estbPanel .ezpkg{border:1px solid #D5DEE7;border-radius:10px;padding:10px 12px}
+#estbPanel .ezpkg h5{margin:0 0 8px;font-size:12px;color:#1F4E78}
+#estbPanel .ezpkg label{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;padding:5px 6px;border-radius:6px;cursor:pointer;flex-direction:row !important;color:var(--text) !important}
+#estbPanel .ezpkg label.on{background:#EEF4FA;color:#1F4E78 !important}
+#estbPanel .ezpkg input{width:auto !important;padding:0 !important}
+#estbPanel .ezpkc{display:flex;gap:8px}#estbPanel .ezpkc input{flex:1}
+#estbPanel .ezfl{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px}
+#estbPanel .ezfl label{display:flex;flex-direction:column;gap:3px;font-size:11px;font-weight:700;color:var(--text2)}
+#estbPanel .ezfl select{min-width:180px;padding:7px 9px;font-family:inherit;font-size:12.5px}
+#estbPanel .ezfl-t{margin-right:auto;font-size:12.5px;color:var(--text2)}#estbPanel .ezfl-t b{color:#1F4E78;font-size:15px}
+#estbPanel .ezdt{overflow-x:auto;width:0;min-width:100%;box-sizing:border-box}
+#estbPanel .ezdt table{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px;min-width:860px}
+#estbPanel .ezdt thead th{background:linear-gradient(180deg,#24598A,#1F4E78);color:#fff;padding:9px 8px;font-size:11.5px;text-align:right;position:sticky;top:0}
+#estbPanel .ezdt td{padding:7px 8px;border-bottom:1px solid #E4EAF0;vertical-align:top}
+#estbPanel .ezdt td.tot{text-align:left;font-weight:800;color:#1F4E78;white-space:nowrap}
+#estbPanel .ezdt tr.ds td{background:#DDEBF7;font-weight:800;color:#1F4E78;border-top:1.5px solid #B9C8D6;font-size:13px}
+#estbPanel .ezdt tr.ds td:first-child{box-shadow:inset -4px 0 0 #1F4E78}
+#estbPanel .ezdt tr.dz td{background:#F4F7FA;font-weight:700}#estbPanel .ezdt tr.dz em{font-style:normal;font-weight:500;color:var(--text3);font-size:11px}
+#estbPanel .ezdt tr.dd{cursor:pointer}#estbPanel .ezdt tr.dd:hover td{background:#FFFBEA}
+#estbPanel .ezdt tr.dd td.dn{padding-right:22px}#estbPanel .ezdt tr.dd td.hw{color:var(--text3);font-size:11.5px}
+#estbPanel .ezdt tr.di td{font-size:12px;color:var(--text2);background:#FCFDFE}#estbPanel .ezdt tr.di td:nth-child(2){padding-right:26px;position:relative}
+#estbPanel .ezdt tr.di td:nth-child(2)::before{content:'└';position:absolute;right:10px;color:#B9C8D6}
+#estbPanel .ezdt tfoot td{background:#FFF2CC;font-weight:800;border-top:2.5px double #8a6a2d;padding:9px 8px}
+
+/* ── פירוט אומדנים — מצב עריכה ── */
+#estbPanel .ezdt.ed td{padding:5px 6px;vertical-align:middle}
+#estbPanel .ezdt.ed td input{width:100%;box-sizing:border-box;font-family:inherit;font-size:12.5px;padding:6px 8px;border-radius:6px;color:var(--text)}
+#estbPanel .ezdt.ed td.tot input.amt{text-align:left;font-weight:800;color:#1F4E78}
+#estbPanel .ezdt.ed .mseg{display:inline-flex;gap:2px;background:#EEF3F8;border:1px solid #D5DEE7;border-radius:7px;padding:2px}
+#estbPanel .ezdt.ed .mseg button{font-family:inherit;font-size:11px;font-weight:700;border:none;background:transparent;color:#4c6a88;padding:4px 9px;border-radius:5px;cursor:pointer}
+#estbPanel .ezdt.ed .mseg button.on{background:#1F4E78;color:#fff}
+#estbPanel .ezdt.ed tr.dd td{background:#fff;border-top:1px solid #E4EAF0}
+#estbPanel .ezdt.ed tr.dd:hover td{background:#fff}
+#estbPanel .ezdt.ed tr.dd{cursor:default}
+#estbPanel .ezdt.ed tr.di td:nth-child(2) input{margin-right:14px;width:calc(100% - 14px)}
+#estbPanel .ezdt.ed tr.dz td{background:#F1F5F9;border-top:1.5px solid #D5DEE7}
+#estbPanel .ezdt.ed .zw{display:flex;align-items:center;gap:6px}#estbPanel .ezdt.ed .zw input.zn{flex:1;font-weight:800}#estbPanel .ezdt.ed .zw input.ar{width:74px;text-align:center}#estbPanel .ezdt.ed .zw span{font-size:11px;color:var(--text3)}
+#estbPanel .ezdt.ed tr.dz input.znote{background:transparent !important;border:1px dashed #C9D4DE !important;font-size:11.5px}
+#estbPanel .ezdt.ed tr.ds .sw{display:flex;align-items:center;gap:8px}#estbPanel .ezdt.ed tr.ds .sw input{width:220px;font-weight:800;color:#1F4E78}#estbPanel .ezdt.ed tr.ds .sw em{font-style:normal;font-weight:500;font-size:11px;color:#4c6a88}
+#estbPanel .ezdt.ed tr.ds .tg{font-style:normal;cursor:pointer}
+#estbPanel .ezdt.ed td.ac{white-space:nowrap;text-align:center}
+#estbPanel .ezdt.ed td.ac i{font-style:normal;cursor:pointer;color:#9aa8b5;padding:2px 5px;border-radius:4px;font-size:12px}
+#estbPanel .ezdt.ed td.ac i:hover{color:#1F4E78;background:#EEF3F8}#estbPanel .ezdt.ed td.ac i.x:hover{color:#B0431F;background:#FBE3DA}
+#estbPanel .ezdt.ed tr.dadd td{background:#FCFDFE;padding:3px 6px 8px}
+#estbPanel .ezdt.ed tr.dadd button{font-family:inherit;font-size:11px;font-weight:700;border-radius:12px;padding:3px 10px;cursor:pointer;margin-left:5px}
+#estbPanel .ezdt.ed tr.dadd button.ia{background:#1F4E78;color:#fff;border:none;margin-right:14px}
+#estbPanel .ezdt.ed tr.dadd button.sg{background:#F4F8FC;color:#1F4E78;border:1px dashed #9FB8CF}
+#estbPanel .ezdt.ed tr.daddd td{background:#fff;padding:5px 8px 9px}
+#estbPanel .ezdt.ed tr.daddd select{font-family:inherit;font-size:12px;padding:6px 10px;border-radius:7px;min-width:220px;background:#F4F8FC !important;border:1.5px dashed #9FB8CF !important;color:#1F4E78;font-weight:700}
+#estbPanel .ezdt.ed tr.addz td{background:transparent;padding:6px 10px 12px;border-bottom:2px solid #D5DEE7}
+#estbPanel .ezdt.ed tr.addz button{font-family:inherit;font-size:11.5px;font-weight:700;color:#1F4E78;background:transparent;border:1.5px dashed #9FB8CF;border-radius:6px;padding:4px 12px;cursor:pointer}
+</style>
+<script>
+/* ═══ בניית אומדן — מצב "מתחמים × מקצועות" (תוספת בלבד · נשמר באותו אומדן פרויקט) ═══ */
+(function(){
+  var PRESETS={
+    'בית חולים / חדרי ניתוח':['הריסה','חשמל','מיזו"א','אינסטלציה וגזים','גמרים','הצטיידות רפואית','מקבעים / בומים'],
+    'שיפוץ פנים — משרדים':['הריסה','בינוי וגבס','חשמל ותקשורת','מיזו"א','אינסטלציה','גמרים','ריהוט וציוד'],
+    'מגורים — בנייה חדשה':['עבודות עפר ודיפון','שלד','בנייה','איטום','אלומיניום','חשמל','אינסטלציה','מיזו"א','גמרים','פיתוח'],
+    'מבנה ציבור':['שלד','מעטפת','חשמל','אינסטלציה','מיזו"א','מערכות בטיחות','גמרים','פיתוח']
+  };
+  var DISC_LIB=[
+    ['עבודות מקדימות',['הריסה ופירוק','עבודות עפר','דיפון וביסוס']],
+    ['שלד ומעטפת',['שלד (בטון)','בנייה','איטום','חיפוי חוץ','אלומיניום וזכוכית','מסגרות ומעקות']],
+    ['בינוי ועבודות פנים',['בינוי וגבס','תקרות אקוסטיות','נגרות','ריצוף וחיפוי','צבע','דלתות','גמרים']],
+    ['מערכות',['חשמל','חשמל ותקשורת','תקשורת ומתח נמוך','מיזו"א','אינסטלציה','אינסטלציה וגזים','גזים רפואיים','כיבוי אש (ספרינקלרים)','גילוי אש','מעליות','בקרת מבנה']],
+    ['ייעודי / רפואי',['הצטיידות רפואית','מקבעים / בומים','חדרים נקיים','מיגון קרינה']],
+    ['חוץ ופיתוח',['פיתוח','גינון והשקיה','תשתיות']],
+    ['כללי',['הוצאות כלליות קבלן','ניהול ופיקוח','ריהוט וציוד']]
+  ];
+  var ITEM_SUGG={
+    'הריסה ופירוק':[['פירוק תקרות אקוסטיות','מ"ר'],['הריסת קירות בלוקים','מ"ר'],['פירוק ריצוף וחיפוי','מ"ר'],['פירוק מערכות קיימות','קומפ׳'],['פינוי פסולת','קומפ׳']],
+    'הריסה':[['פירוק תקרות','מ"ר'],['הריסת קירות','מ"ר'],['פירוק ריצוף','מ"ר'],['פינוי פסולת','קומפ׳']],
+    'בינוי וגבס':[['מחיצות גבס','מ"ר'],['מחיצות גבס עמידות אש','מ"ר'],['תקרות גבס','מ"ר'],['סגירות גבס למערכות','מ"א'],['קירות בלוקים','מ"ר']],
+    'תקרות אקוסטיות':[['תקרה אקוסטית מינרלית','מ"ר'],['תקרה מתכתית','מ"ר'],['סינרי גבס','מ"א']],
+    'ריצוף וחיפוי':[['ריצוף פורצלן','מ"ר'],['חיפוי קירות','מ"ר'],['פנלים','מ"א'],['ריצוף PVC / אפוקסי','מ"ר']],
+    'צבע':[['צבע קירות','מ"ר'],['צבע תקרות','מ"ר'],['צבע אפוקסי','מ"ר']],
+    'דלתות':[['דלת פנים','יח׳'],['דלת אש','יח׳'],['דלת הזזה אוטומטית','יח׳']],
+    'גמרים':[['ריצוף','מ"ר'],['חיפוי','מ"ר'],['צבע','מ"ר'],['תקרות','מ"ר'],['דלתות','יח׳']],
+    'חשמל':[['נקודות חשמל','יח׳'],['גופי תאורה','יח׳'],['לוחות חשמל','יח׳'],['תעלות וכבילה','מ"א'],['תאורת חירום','יח׳']],
+    'חשמל ותקשורת':[['נקודות חשמל','יח׳'],['נקודות תקשורת','יח׳'],['גופי תאורה','יח׳'],['לוחות חשמל','יח׳'],['ארון תקשורת','יח׳']],
+    'תקשורת ומתח נמוך':[['נקודות תקשורת','יח׳'],['מצלמות אבטחה','יח׳'],['בקרת כניסה','יח׳'],['כריזה','קומפ׳']],
+    'מיזו"א':[['יחידות מיזוג / מפוחים','יח׳'],['תעלות אוויר','מ"ר'],['מפזרים ותריסים','יח׳'],['מערכת פליטה','קומפ׳'],['צנרת מים קרים/חמים','מ"א']],
+    'אינסטלציה':[['נקודות מים וביוב','יח׳'],['כלים סניטריים','יח׳'],['צנרת','מ"א'],['מתקני דלוחין / מפרידים','יח׳']],
+    'אינסטלציה וגזים':[['נקודות מים וביוב','יח׳'],['כלים סניטריים','יח׳'],['נקודות גזים רפואיים','יח׳'],['צנרת','מ"א']],
+    'גזים רפואיים':[['נקודות חמצן','יח׳'],['נקודות ואקום','יח׳'],['נקודות אוויר רפואי','יח׳'],['לוח אזעקה','יח׳']],
+    'כיבוי אש (ספרינקלרים)':[['ראשי ספרינקלרים','יח׳'],['צנרת כיבוי','מ"א'],['ארונות כיבוי','יח׳']],
+    'גילוי אש':[['גלאים','יח׳'],['רכזת','יח׳'],['צופרים / מנצנצים','יח׳']],
+    'הצטיידות רפואית':[['ציוד לפי רשימת מזמין','קומפ׳'],['מנורות ניתוח','יח׳'],['שולחנות ניתוח','יח׳']],
+    'מקבעים / בומים':[['בום מרדים','יח׳'],['בום מנתח','יח׳'],['מקבעי תקרה','יח׳']],
+    'אלומיניום וזכוכית':[['חלונות','מ"ר'],['ויטרינות','מ"ר'],['קירות מסך','מ"ר']],
+    'פיתוח':[['ריצוף חוץ','מ"ר'],['גינון','מ"ר'],['תאורת חוץ','יח׳'],['גדרות ושערים','מ"א']]
+  };
+  var ADDS=[{k:'cont',l:'בלתי צפוי / חריגים',t:'pct'},{k:'plan',l:'שכר טרחה מתכננים',t:'pct'},{k:'esc',l:'התייקרויות',t:'pct'},{k:'permit',l:'אגרת היתר בנייה (₪/מ"ר)',t:'rate'}];
+  var UI={cell:null, showAll:false};
+  function uid(){ return 'z'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+  function C(){ return window._estb.__ctx(); }
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function money(n){ return '₪'+Math.round(n||0).toLocaleString('he-IL'); }
+  function num(v){ return parseFloat(String(v==null?0:v).replace(/[^\d.-]/g,''))||0; }
+  var UNDO=[];
+  function Z(){ var m=C().state.model; if(!m.z) m.z={stages:[], disc:[], zones:[], cells:{}}; var z=m.z;
+    if(!z.stages){ z.stages=[]; var seen={}; z.zones.forEach(function(zn){ var n=zn.stage||'—'; if(!seen[n]){ seen[n]={id:uid(),n:n}; z.stages.push(seen[n]); } zn.sid=seen[n].id; delete zn.stage; }); }
+    if(!m.adds) m.adds={cont:5,plan:8,esc:3,permit:0}; if(m.vat==null) m.vat=18; return z; }
+  function stageOf(z, zn){ return z.stages.filter(function(s){ return s.id===zn.sid; })[0] || {id:zn.sid, n:'—'}; }
+  function save(){ C().save(); }
+  function itemsSum(c){ return (c.items||[]).reduce(function(s,it){ return s+num(it.q)*num(it.p); },0); }
+  function cellVal(z, zone, d){ var c=z.cells[zone.id+'|'+d.id]; if(!c||c.na) return 0; if(c.mode==='rate') return num(c.rate)*num(zone.area); if(c.mode==='items') return itemsSum(c); return num(c.amt); }
+  function totals(){ var z=Z(), T={zone:{}, disc:{}, stage:{}, all:0, area:0};
+    z.stages.forEach(function(st){ T.stage[st.id]={sum:0,area:0,n:0,disc:{}}; });
+    z.zones.forEach(function(zn){ var S=T.stage[zn.sid]||(T.stage[zn.sid]={sum:0,area:0,n:0,disc:{}}); var s=0; z.disc.forEach(function(d){ var v=cellVal(z,zn,d); s+=v; T.disc[d.id]=(T.disc[d.id]||0)+v; S.disc[d.id]=(S.disc[d.id]||0)+v; }); T.zone[zn.id]=s; S.sum+=s; S.area+=num(zn.area); S.n++; T.all+=s; T.area+=num(zn.area); });
+    return T; }
+  function addsCalc(base, area){ var m=C().state.model, rows=[], sum=0; ADDS.forEach(function(a){ var amt=a.t==='rate'?num(m.adds[a.k])*area:base*num(m.adds[a.k])/100; sum+=amt; rows.push({a:a, amt:amt}); }); var ex=base+sum, vat=ex*num(m.vat)/100; return {rows:rows, ex:ex, vat:vat, inv:ex+vat}; }
+
+  function modeBar(cur){ return '<div class="ezm"><button class="'+(cur!=='zones'?'on':'')+'" onclick="window._estb.setMode(\'sqm\')">📐 אומדן לפי מ"ר</button><button class="'+(cur==='zones'?'on':'')+'" onclick="window._estb.setMode(\'zones\')">🧩 אומדן לפי מתחמים ומקצועות</button></div><span class="ezlegend"><i></i>שדה למילוי</span>'; }
+
+  function render(panel, projOpts){
+    var z=Z(), T=totals(), m=C().state.model, ac=addsCalc(T.all, T.area);
+    var h='<div class="etop"><div class="ebrand"><div class="ebar"></div><div><h2>בניית אומדן <span class="d">·</span> לפי מתחמים ומקצועות</h2><div class="esub">שלבים · מתחמים · מקצועות — מבנה חופשי לכל פרויקט</div></div></div>'
+      +'<div><span class="esaved" id="estbSaved"></span><button class="ebtn" onclick="__estZ.undo()"'+(UNDO.length?'':' disabled')+' title="בטל פעולה אחרונה">↶ בטל</button><label class="ebtn" style="cursor:pointer">📥 ייבוא מ-Excel<input type="file" accept=".xlsx,.xls" style="display:none" onchange="__estZ.importXlsx(this)"></label><button class="ebtn pri" onclick="__estZ.exportXlsx()">⭳ ייצוא ל-Excel</button></div></div>'
+      +modeBar('zones')
+      +'<div class="eproj"><label>פרויקט:</label><div style="min-width:220px"><select id="estbProj" onchange="window._estb.onProj(this.value)">'+projOpts+'</select></div>'+(z.zones.length||z.disc.length?'<button class="ebtn" onclick="__estZ.clear()" style="margin-right:auto;color:#B0431F;border-color:#F0C2AE">🧹 התחל מחדש</button>':'')+'</div>';
+    if(!z.disc.length && !z.zones.length){
+      h+='<div class="ecard ezstart"><div class="eph"><span class="estep">✦</span>איך להתחיל את האומדן לפרויקט הזה?</div><div class="ezstart-g">'
+        +'<button onclick="__estZ.start(\'\')"><b>📄 טבלה ריקה</b><span>שלב אחד, בלי מקצועות — בונים הכל בעצמך</span></button>'
+        +Object.keys(PRESETS).map(function(k){ return '<button onclick="__estZ.start(\''+esc(k)+'\')"><b>🧩 '+esc(k)+'</b><span>'+PRESETS[k].join(' · ')+'</span></button>'; }).join('')
+        +'<label class="ezstart-x"><b>📥 מקובץ Excel קיים</b><span>גליון "פירוט אומדנים" עם שלב · מתחם · מקצוע · אומדן</span><input type="file" accept=".xlsx,.xls" style="display:none" onchange="__estZ.importXlsx(this)"></label>'
+        +'</div><div class="ehint">כל תבנית היא רק נקודת פתיחה — אפשר למחוק ולהוסיף שלבים, מתחמים ומקצועות בכל רגע.</div></div>';
+      panel.innerHTML=h; return; }
+    h+='<div class="ezk"><div><span>אומדן עבודות</span><b class="emono">'+money(T.all)+'</b></div><div><span>כולל תוספות ומע"מ</span><b class="emono">'+money(ac.inv)+'</b></div><div><span>שטח כולל</span><b class="emono">'+Math.round(T.area).toLocaleString('he-IL')+' מ"ר</b></div><div><span>ממוצע למ"ר</span><b class="emono">'+(T.area?money(T.all/T.area):'—')+'</b></div><div><span>מבנה האומדן</span><b style="font-size:14px">'+z.stages.length+' שלבים · '+z.zones.length+' מתחמים · '+z.disc.length+' מקצועות</b></div></div>';
+    /* main table */
+    var VIEW=UI.view||'grid';
+    h+='<div class="ecard ezcard"><div class="eph"><span class="estep">1</span>'+(VIEW==='grid'?'טבלת האומדן':'פירוט אומדנים')+'<div class="ezview"><button class="'+(VIEW==='grid'?'on':'')+'" onclick="__estZ.view(\'grid\')">▦ טבלה</button><button class="'+(VIEW==='detail'?'on':'')+'" onclick="__estZ.view(\'detail\')">☰ פירוט אומדנים</button></div><div class="eztools"><button onclick="__estZ.stageAdd()">+ שלב</button><button onclick="__estZ.picker(true)">+ מקצועות</button></div></div>';
+    if(VIEW==='detail'){ h+=detailView(z,T); }
+    else {
+    h+='<div class="ezmx"><table><thead><tr><th class="s">שלב / מתחם</th><th class="a">מ"ר</th>'
+      +z.disc.map(function(d,i){ return '<th class="dh"><input class="dhn" value="'+esc(d.n)+'" onchange="__estZ.discName('+i+',this.value)" title="שינוי שם המקצוע"><span class="dha">'+(i>0?'<i onclick="__estZ.discMove('+i+',-1)" title="הזז ימינה">›</i>':'')+(i<z.disc.length-1?'<i onclick="__estZ.discMove('+i+',1)" title="הזז שמאלה">‹</i>':'')+'<i class="x" onclick="__estZ.discDel('+i+')" title="מחק מקצוע">✕</i></span></th>'; }).join('')
+      +'<th class="add"><button onclick="__estZ.discAdd()" title="הוסף מקצוע">+</button></th><th class="t">סה"כ</th><th class="a">₪/מ"ר</th><th class="ac"></th></tr></thead><tbody>';
+    var span=z.disc.length+6;
+    z.stages.forEach(function(st, si){ var S=T.stage[st.id]||{sum:0,area:0,n:0,disc:{}};
+      h+='<tr class="st"><td class="s"><span class="stw"><i class="tg" onclick="__estZ.stageToggle('+si+')">'+(st.c?'◂':'▾')+'</i><input value="'+esc(st.n)+'" onchange="__estZ.stageName('+si+',this.value)" title="שם השלב"'+F('gsn'+st.id)+'><em>'+S.n+' מתחמים</em></span></td><td class="a emono">'+(S.area?Math.round(S.area).toLocaleString('he-IL'):'')+'</td>'
+        +z.disc.map(function(d){ var v=S.disc[d.id]||0; return '<td class="emono">'+(v?money(v):'')+'</td>'; }).join('')
+        +'<td class="add"></td><td class="t emono">'+money(S.sum)+'</td><td class="a emono">'+(S.area?money(S.sum/S.area):'')+'</td><td class="ac"><i onclick="__estZ.stageMove('+si+',-1)" title="הזז למעלה">↑</i><i class="x" onclick="__estZ.stageDel('+si+')" title="מחק שלב">✕</i></td></tr>';
+      if(st.c) return;
+      z.zones.forEach(function(zn, zi){ if(zn.sid!==st.id) return;
+        h+='<tr><td class="s"><input class="zn" value="'+esc(zn.name)+'" placeholder="שם המתחם" onchange="__estZ.zset('+zi+',\'name\',this.value)"'+F('gzn'+zn.id)+'><input class="znote" value="'+esc(zn.notes||'')+'" placeholder="הערה…" onchange="__estZ.zset('+zi+',\'notes\',this.value)"'+F('gzt'+zn.id)+'></td>'
+          +'<td class="a"><input class="emono ar" inputmode="decimal" value="'+(zn.area?num(zn.area).toLocaleString('he-IL'):'')+'" placeholder="מ״ר" onchange="__estZ.zset('+zi+',\'area\',this.value)"'+F('gza'+zn.id)+'></td>'
+          +z.disc.map(function(d){ var c=z.cells[zn.id+'|'+d.id]||{}, v=cellVal(z,zn,d), k=zn.id+'|'+d.id;
+            if(c.na) return '<td class="na" onclick="__estZ.open(\''+k+'\')" title="לחץ לשינוי">לא רלוונטי</td>';
+            var inner = c.mode==='rate' ? '<span class="ezr" onclick="__estZ.open(\''+k+'\')">'+money(v)+'<small>'+num(c.rate).toLocaleString('he-IL')+' ₪/מ"ר</small></span>' : c.mode==='items' ? '<span class="ezr it" onclick="__estZ.open(\''+k+'\')">'+money(v)+'<small>☰ '+(c.items||[]).length+' סעיפים</small></span>' : '<input class="emono" inputmode="numeric" value="'+(c.amt?num(c.amt).toLocaleString('he-IL'):'')+'" placeholder="—" onchange="__estZ.cset(\''+k+'\',this.value)"'+F('g'+k)+'>';
+            return '<td class="c'+(c.basis||c.note?' has':'')+'">'+inner+'<i class="ezdot" onclick="__estZ.open(\''+k+'\')" title="'+esc(c.basis||c.note?((c.basis?'בסיס: '+c.basis:'')+(c.note?' · '+c.note:'')):'בסיס אומדן, ₪/מ״ר, הערות, לא רלוונטי')+'">⋯</i></td>'; }).join('')
+          +'<td class="add"></td><td class="t emono">'+money(T.zone[zn.id])+'</td><td class="a emono">'+(num(zn.area)?money(T.zone[zn.id]/num(zn.area)):'—')+'</td><td class="ac"><i onclick="__estZ.zdup('+zi+')" title="שכפל">⧉</i><i class="x" onclick="__estZ.zdel('+zi+')" title="מחק מתחם">✕</i></td></tr>'; });
+      h+='<tr class="addz"><td colspan="'+span+'"><button onclick="__estZ.zadd(\''+st.id+'\')">+ מתחם ב'+esc(st.n)+'</button></td></tr>';
+    });
+    h+='</tbody><tfoot><tr><td class="s">סה"כ</td><td class="a emono">'+(T.area?Math.round(T.area).toLocaleString('he-IL'):'')+'</td>'+z.disc.map(function(d){ return '<td class="emono">'+money(T.disc[d.id]||0)+'<small>'+(T.all?Math.round((T.disc[d.id]||0)/T.all*100):0)+'%</small></td>'; }).join('')+'<td class="add"></td><td class="t emono">'+money(T.all)+'</td><td class="a emono">'+(T.area?money(T.all/T.area):'—')+'</td><td class="ac"></td></tr></tfoot></table></div>'
+      +'<div class="ehint">שדות צהובים = למילוי · ⋯ בתא = פירוט סעיפים, ₪/מ"ר, בסיס אומדן, הערה או "לא רלוונטי" · ▾ לכיווץ שלב · ✕ למחיקה (אפשר לבטל עם ↶)</div>';
+    }
+    h+='</div>';
+    /* summaries + adds */
+    var mx=Math.max.apply(null,[1].concat(z.disc.map(function(d){return T.disc[d.id]||0;})));
+    h+='<div class="egrid ezg"><div class="ecard"><div class="eph"><span class="estep">2</span>סיכום לפי מקצוע ולפי שלב</div>'
+      +(z.disc.length?'<div class="ezbars">'+z.disc.map(function(d){ var v=T.disc[d.id]||0; return '<div class="ezb"><span>'+esc(d.n)+'</span><div><i style="width:'+(v/mx*100)+'%"></i></div><b class="emono">'+money(v)+'</b><em>'+(T.all?Math.round(v/T.all*100):0)+'%</em></div>'; }).join('')+'</div>':'<div class="ehint">הוסף מקצועות כדי לראות חלוקה</div>')
+      +'<table class="etbl" style="margin-top:14px"><thead><tr><th>שלב</th><th>מתחמים</th><th>מ"ר</th><th style="text-align:left">אומדן</th><th style="text-align:left">%</th></tr></thead><tbody>'+z.stages.map(function(st){ var S=T.stage[st.id]||{sum:0,area:0,n:0}; return '<tr><td><b>'+esc(st.n)+'</b></td><td>'+S.n+'</td><td class="emono">'+Math.round(S.area).toLocaleString('he-IL')+'</td><td class="emono" style="text-align:left">'+money(S.sum)+'</td><td class="emono" style="text-align:left">'+(T.all?Math.round(S.sum/T.all*100):0)+'%</td></tr>'; }).join('')+'</tbody></table></div>'
+      +'<div><div class="ebasebox"><div class="l">אומדן עבודות</div><div class="v emono">'+money(T.all)+'</div></div><div class="ecard"><div class="eph"><span class="estep">3</span>תוספות וסיכום</div><div class="ewf">'
+      +ac.rows.map(function(r){ return '<div class="line"><span class="nm">'+r.a.l+(r.a.t==='pct'?' <span style="color:#5A716D">%</span>':'')+'</span><div class="pct"><input class="emono" value="'+num(m.adds[r.a.k])+'" onchange="__estZ.add(\''+r.a.k+'\',this.value)"></div><span class="amt emono">'+money(r.amt)+'</span></div>'; }).join('')
+      +'<div class="line sub"><span class="nm">סך הכל ללא מע"מ</span><span class="amt emono">'+money(ac.ex)+'</span></div><div class="line"><span class="nm">מע"מ <span style="color:#5A716D">%</span></span><div class="pct"><input class="emono" value="'+num(m.vat)+'" onchange="__estZ.vat(this.value)"></div><span class="amt emono">'+money(ac.vat)+'</span></div><div class="line grand"><span class="nm">סך כל האומדן (כולל מע"מ)</span><span class="amt emono">'+money(ac.inv)+'</span></div></div></div></div></div>';
+    /* cell editor */
+    if(UI.cell){ var parts=UI.cell.split('|'), zn=z.zones.filter(function(x){return x.id===parts[0];})[0], d=z.disc.filter(function(x){return x.id===parts[1];})[0], c=z.cells[UI.cell]||{};
+      if(zn&&d){ h+='<div class="ezpop" onclick="if(event.target===this)__estZ.close()"><div class="ezpb'+(c.mode==='items'&&!c.na?' wide':'')+'"><div class="ezph"><b>'+esc(zn.name||'מתחם')+' · '+esc(d.n)+'</b><i onclick="__estZ.close()">✕</i></div>'
+        +'<div class="ezseg"><button class="'+((!c.mode||c.mode==='sum')&&!c.na?'on':'')+'" onclick="__estZ.cfield(\'mode\',\'sum\')">סכום כולל</button><button class="'+(c.mode==='items'&&!c.na?'on':'')+'" onclick="__estZ.toItems(\''+UI.cell+'\')">☰ פירוט סעיפים</button><button class="'+(c.mode==='rate'&&!c.na?'on':'')+'" onclick="__estZ.cfield(\'mode\',\'rate\')">₪ למ"ר</button><button class="'+(c.na?'on':'')+'" onclick="__estZ.cfield(\'na\','+(!c.na)+')">לא רלוונטי</button></div>'
+        +(c.na?'':(c.mode==='items'?itemsEditor(UI.cell, c, d):c.mode==='rate'?'<label>מחיר למ"ר<input class="emono" value="'+(c.rate||'')+'" onchange="__estZ.cfield(\'rate\',this.value)"></label><div class="ehint">= '+money(cellVal(z,zn,d))+(num(zn.area)?'':' · ⚠ הגדר מ"ר למתחם')+'</div>':'<label>סכום (₪)<input class="emono" value="'+(c.amt||'')+'" onchange="__estZ.cfield(\'amt\',this.value)"></label>'))
+        +'<label>בסיס האומדן<input value="'+esc(c.basis||'')+'" placeholder="למשל: הצעת מחיר ספק / מחירון / אומדן יועץ" onchange="__estZ.cfield(\'basis\',this.value)"></label><label>הערות<textarea onchange="__estZ.cfield(\'note\',this.value)">'+esc(c.note||'')+'</textarea></label>'
+        +'<div style="display:flex;gap:8px"><button class="ebtn pri" style="flex:1" onclick="__estZ.close()">סיום</button><button class="ebtn" onclick="__estZ.cclear()" style="color:#B0431F">נקה תא</button></div></div></div>'; } }
+    if(UI.picker) h+=pickerHTML(z);
+    panel.innerHTML=h;
+  }
+  function itemsEditor(k, c, d){ var its=c.items||[], sg=(ITEM_SUGG[d.n]||[]).filter(function(x){ return !its.some(function(it){ return it.d===x[0]; }); });
+    return '<div class="ezit"><table><thead><tr><th>סעיף</th><th style="width:70px">כמות</th><th style="width:64px">יח׳</th><th style="width:96px">מחיר יח׳</th><th style="width:100px">סה"כ</th><th style="width:26px"></th></tr></thead><tbody>'
+      +(its.length?its.map(function(it,i){ return '<tr><td><input value="'+esc(it.d)+'" placeholder="תיאור הסעיף" onchange="__estZ.iset(\''+k+'\','+i+',\'d\',this.value)"></td><td><input class="emono" inputmode="decimal" value="'+(it.q!==''&&it.q!=null?it.q:'')+'" onchange="__estZ.iset(\''+k+'\','+i+',\'q\',this.value)"></td><td><input value="'+esc(it.u||'')+'" onchange="__estZ.iset(\''+k+'\','+i+',\'u\',this.value)"></td><td><input class="emono" inputmode="decimal" value="'+(it.p?num(it.p).toLocaleString('he-IL'):'')+'" onchange="__estZ.iset(\''+k+'\','+i+',\'p\',this.value)"></td><td class="emono tot">'+money(num(it.q)*num(it.p))+'</td><td><i onclick="__estZ.idel(\''+k+'\','+i+')">✕</i></td></tr>'; }).join(''):'<tr><td colspan="6" class="ehint" style="text-align:center;padding:10px">אין סעיפים — הוסף סעיף או בחר מההצעות</td></tr>')
+      +'</tbody><tfoot><tr><td colspan="4">סה"כ '+esc(d.n)+'</td><td class="emono tot">'+money(itemsSum(c))+'</td><td></td></tr></tfoot></table>'
+      +'<button class="eaddbtn" style="margin:8px 0 0" onclick="__estZ.iadd(\''+k+'\')">+ סעיף</button>'
+      +(sg.length?'<div class="ezsg"><span>הצעות ל'+esc(d.n)+':</span>'+sg.map(function(x){ return '<button onclick="__estZ.iadd(\''+k+'\',\''+esc(x[0]).replace(/'/g,'')+'\',\''+esc(x[1])+'\')">+ '+esc(x[0])+'</button>'; }).join('')+'</div>':'')+'</div>'; }
+  function F(id){ return ' data-fid="'+id+'"'; }
+  function detailView(z,T){
+    var Fl=UI.f||{}, rows='', grand=0, anyZone=false;
+    var METH=[['sum','סכום'],['items','סעיפים'],['rate','₪/מ"ר']];
+    z.stages.forEach(function(st, si){ if(Fl.s&&Fl.s!==st.id) return; var S=T.stage[st.id]||{sum:0,n:0};
+      var stSum=0, body='';
+      z.zones.forEach(function(zn, zi){ if(zn.sid!==st.id) return; anyZone=true; var zRows='', zSum=0, used={};
+        z.disc.forEach(function(d){ if(Fl.d&&Fl.d!==d.id) return; var k=zn.id+'|'+d.id, c=z.cells[k]; if(!c||c.na) return;
+          var has=(c.mode==='items'&&c.items&&c.items.length)||num(c.amt)||num(c.rate)||c.basis||c.note||c.open; if(!has) return;
+          used[d.id]=1; var v=cellVal(z,zn,d); zSum+=v; var md=c.mode||'sum';
+          zRows+='<tr class="dd"><td class="dn"><b>'+esc(d.n)+'</b></td>'
+            +'<td class="hw"><span class="mseg">'+METH.map(function(m){ return '<button class="'+(md===m[0]?'on':'')+'" onclick="__estZ.dmode(\''+k+'\',\''+m[0]+'\')">'+m[1]+'</button>'; }).join('')+'</span></td>'
+            +(md==='sum'?'<td colspan="3"></td><td class="tot"><input class="emono amt" inputmode="numeric" value="'+(num(c.amt)?num(c.amt).toLocaleString('he-IL'):'')+'" placeholder="סכום ₪" onchange="__estZ.cset(\''+k+'\',this.value)"'+F('a'+k)+'></td>'
+              :md==='rate'?'<td><span class="emono">'+(num(zn.area)||0).toLocaleString('he-IL')+'</span></td><td>מ"ר</td><td><input class="emono" inputmode="decimal" value="'+(num(c.rate)||'')+'" placeholder="₪/מ״ר" onchange="__estZ.dset(\''+k+'\',\'rate\',this.value)"'+F('r'+k)+'></td><td class="emono tot">'+money(v)+'</td>'
+              :'<td colspan="3" class="hw">'+(c.items||[]).length+' סעיפים</td><td class="emono tot">'+money(v)+'</td>')
+            +'<td><input value="'+esc(c.basis||'')+'" placeholder="בסיס האומדן" onchange="__estZ.dset(\''+k+'\',\'basis\',this.value)"'+F('b'+k)+'></td><td><input value="'+esc(c.note||'')+'" placeholder="הערה" onchange="__estZ.dset(\''+k+'\',\'note\',this.value)"'+F('n'+k)+'></td>'
+            +'<td class="ac"><i onclick="__estZ.dclear(\''+k+'\')" class="x" title="הסר מקצוע מהמתחם">✕</i></td></tr>';
+          if(md==='items'){
+            (c.items||[]).forEach(function(it,ii){ zRows+='<tr class="di"><td></td><td><input value="'+esc(it.d||'')+'" placeholder="תיאור הסעיף" onchange="__estZ.iset(\''+k+'\','+ii+',\'d\',this.value)"'+F('id'+k+ii)+'></td><td><input class="emono" inputmode="decimal" value="'+(it.q!==''&&it.q!=null?it.q:'')+'" placeholder="כמות" onchange="__estZ.iset(\''+k+'\','+ii+',\'q\',this.value)"'+F('iq'+k+ii)+'></td><td><input value="'+esc(it.u||'')+'" onchange="__estZ.iset(\''+k+'\','+ii+',\'u\',this.value)"'+F('iu'+k+ii)+'></td><td><input class="emono" inputmode="decimal" value="'+(it.p?num(it.p).toLocaleString('he-IL'):'')+'" placeholder="מחיר" onchange="__estZ.iset(\''+k+'\','+ii+',\'p\',this.value)" onkeydown="if(event.key===\'Enter\'&&'+(ii===(c.items.length-1))+'){event.stopPropagation();event.preventDefault();this.blur();__estZ.iadd(\''+k+'\');}"'+F('ip'+k+ii)+'></td><td class="emono">'+money(num(it.q)*num(it.p))+'</td><td colspan="2"></td><td class="ac"><i class="x" onclick="__estZ.idel(\''+k+'\','+ii+')" title="מחק סעיף">✕</i></td></tr>'; });
+            var sg=(ITEM_SUGG[d.n]||[]).filter(function(x){ return !(c.items||[]).some(function(it){ return it.d===x[0]; }); }).slice(0,5);
+            zRows+='<tr class="dadd"><td></td><td colspan="8"><button class="ia" onclick="__estZ.iadd(\''+k+'\')">+ סעיף</button>'+sg.map(function(x){ return '<button class="sg" onclick="__estZ.iadd(\''+k+'\',\''+esc(x[0]).replace(/'/g,'')+'\',\''+esc(x[1])+'\')">+ '+esc(x[0])+'</button>'; }).join('')+'</td></tr>'; }
+        });
+        var free=z.disc.filter(function(d){ return !used[d.id] && !(Fl.d&&Fl.d!==d.id) && !((z.cells[zn.id+'|'+d.id]||{}).na); });
+        body+='<tr class="dz"><td colspan="2"><div class="zw"><input class="zn" value="'+esc(zn.name)+'" placeholder="שם המתחם" onchange="__estZ.zset('+zi+',\'name\',this.value)"'+F('zn'+zn.id)+'><input class="ar emono" inputmode="decimal" value="'+(zn.area?num(zn.area).toLocaleString('he-IL'):'')+'" placeholder="מ״ר" onchange="__estZ.zset('+zi+',\'area\',this.value)"'+F('za'+zn.id)+'><span>מ"ר</span></div></td>'
+          +'<td colspan="3"><input class="znote" value="'+esc(zn.notes||'')+'" placeholder="הערה למתחם…" onchange="__estZ.zset('+zi+',\'notes\',this.value)"'+F('zt'+zn.id)+'></td><td class="emono tot">'+money(zSum)+'</td><td colspan="2"></td><td class="ac"><i onclick="__estZ.zdup('+zi+')" title="שכפל מתחם">⧉</i><i class="x" onclick="__estZ.zdel('+zi+')" title="מחק מתחם">✕</i></td></tr>'
+          +zRows
+          +'<tr class="daddd"><td colspan="9"><select onchange="__estZ.dadd(\''+zn.id+'\',this.value);this.value=\'\'"><option value="">+ הוסף מקצוע למתחם…</option>'+free.map(function(d){ return '<option value="'+d.id+'">'+esc(d.n)+'</option>'; }).join('')+'<option value="__new">➕ מקצוע חדש לפרויקט…</option></select></td></tr>';
+        stSum+=zSum;
+      });
+      rows+='<tr class="ds"><td colspan="5"><div class="sw"><i class="tg" onclick="__estZ.stageToggle('+si+')">'+(st.c?'◂':'▾')+'</i><input value="'+esc(st.n)+'" onchange="__estZ.stageName('+si+',this.value)"'+F('sn'+st.id)+'><em>'+S.n+' מתחמים</em></div></td><td class="emono tot">'+money(stSum)+'</td><td colspan="2"></td><td class="ac"><i onclick="__estZ.stageMove('+si+',-1)" title="הזז למעלה">↑</i><i class="x" onclick="__estZ.stageDel('+si+')" title="מחק שלב">✕</i></td></tr>'
+        +(st.c?'':body+'<tr class="addz"><td colspan="9"><button onclick="__estZ.zadd(\''+st.id+'\')">+ מתחם ב'+esc(st.n)+'</button></td></tr>');
+      grand+=stSum;
+    });
+    return '<div class="ezfl"><label>שלב<select onchange="__estZ.filt(\'s\',this.value)"><option value="">כל השלבים</option>'+z.stages.map(function(s){ return '<option value="'+s.id+'"'+(Fl.s===s.id?' selected':'')+'>'+esc(s.n)+'</option>'; }).join('')+'</select></label><label>מקצוע<select onchange="__estZ.filt(\'d\',this.value)"><option value="">כל המקצועות</option>'+z.disc.map(function(d){ return '<option value="'+d.id+'"'+(Fl.d===d.id?' selected':'')+'>'+esc(d.n)+'</option>'; }).join('')+'</select></label><span class="ezfl-t">סה"כ בתצוגה: <b class="emono">'+money(grand)+'</b></span></div>'
+      +'<div class="ezdt ed"><table><thead><tr><th style="width:150px">מקצוע</th><th>סעיף / שיטה</th><th style="width:80px">כמות</th><th style="width:60px">יח׳</th><th style="width:100px">מחיר יח׳</th><th style="width:130px">סה"כ</th><th>בסיס האומדן</th><th>הערות</th><th style="width:52px"></th></tr></thead><tbody>'
+      +rows+'</tbody><tfoot><tr><td colspan="5">סה"כ</td><td class="emono tot">'+money(grand)+'</td><td colspan="3"></td></tr></tfoot></table></div>'
+      +'<div class="ehint">הכל נערך כאן ישירות · Enter/Tab עוברים לשדה הבא · Enter במחיר של הסעיף האחרון מוסיף סעיף חדש · ✕ מוחק (↶ לביטול) · השינויים מתעדכנים גם בטבלה</div>'; }
+  function pickerHTML(z){ var have={}; z.disc.forEach(function(d){ have[d.n]=true; });
+    return '<div class="ezpop" onclick="if(event.target===this)__estZ.picker(false)"><div class="ezpb wide"><div class="ezph"><b>בחירת מקצועות לפרויקט</b><i onclick="__estZ.picker(false)">✕</i></div><div class="ezpk">'
+      +(function(){ var lib={}; DISC_LIB.forEach(function(g){ g[1].forEach(function(n){ lib[n]=1; }); }); var cu=z.disc.filter(function(d){ return !lib[d.n]; }); return cu.length?'<div class="ezpkg" style="border-color:#C9A84C"><h5>מקצועות שהוספת</h5>'+cu.map(function(d){ return '<label class="on"><input type="checkbox" checked onchange="__estZ.discToggle(\''+esc(d.n).replace(/'/g,"\\'")+'\',this.checked)">'+esc(d.n)+'</label>'; }).join('')+'</div>':''; })()
+      +DISC_LIB.map(function(g){ return '<div class="ezpkg"><h5>'+esc(g[0])+'</h5>'+g[1].map(function(n){ return '<label class="'+(have[n]?'on':'')+'"><input type="checkbox"'+(have[n]?' checked':'')+' onchange="__estZ.discToggle(\''+esc(n).replace(/'/g,"\\'")+'\',this.checked)">'+esc(n)+'</label>'; }).join('')+'</div>'; }).join('')
+      +'</div><div class="ezpkc"><input id="ezNewDisc" placeholder="מקצוע שלא ברשימה…" onkeydown="if(event.key===\'Enter\')__estZ.discCustom()"><button class="ebtn pri" onclick="__estZ.discCustom()">+ הוסף</button></div>'
+      +'<div class="ehint">מסומן = קיים בפרויקט · ביטול סימון מוחק את העמודה (אפשר לבטל עם ↶)</div><button class="ebtn pri" style="width:100%" onclick="__estZ.picker(false)">סיום</button></div></div>'; }
+  function rer(){ var y=window.scrollY, sc=document.querySelector('#estbPanel .ezmx,#estbPanel .ezdt'), sl=sc?sc.scrollLeft:0, ae=document.activeElement, fid=ae&&ae.getAttribute&&ae.getAttribute('data-fid');
+    C().render(); window.scrollTo(0,y); var sc2=document.querySelector('#estbPanel .ezmx,#estbPanel .ezdt'); if(sc2) sc2.scrollLeft=sl;
+    if(fid){ var el=document.querySelector('#estbPanel [data-fid="'+fid+'"]'); if(el){ el.focus({preventScroll:true}); try{ var L=el.value.length; el.setSelectionRange(L,L); }catch(e){} } } }
+  var RT=null; function rerSoon(){ clearTimeout(RT); RT=setTimeout(rer, 0); }
+  function snap(){ UNDO.push(JSON.stringify(C().state.model.z||null)); if(UNDO.length>30) UNDO.shift(); }
+  function mut(fn, undoable){ if(undoable) snap(); fn(Z()); save(); rerSoon(); }
+  function toastUndo(msg){ if(window.showToast) showToast(msg+' · ↶ בטל להחזרה'); }
+  /* ── Excel export (מבוסס על התבנית שלך, עם נוסחאות) ── */
+  function loadExcelJS(cb){ if(window.ExcelJS){ cb(); return; } var s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js'; s.onload=cb; s.onerror=function(){ if(window.showToast) showToast('⚠️ אין חיבור לאינטרנט לטעינת רכיב ה-Excel'); }; document.head.appendChild(s); }
+  function exportXlsx(){ loadExcelJS(function(){ try{ build(); }catch(e){ console.error(e); if(window.showToast) showToast('⚠️ שגיאה בייצוא: '+e.message); } }); }
+  function build(){
+    var z=Z(), m=C().state.model, st=C().state, projs=[]; try{ projs=JSON.parse(localStorage.getItem('pm_projects')||'[]'); }catch(e){}
+    var pr=projs.filter(function(p){return String(p.id)===String(st.pid);})[0]||{}, T=totals();
+    var wb=new ExcelJS.Workbook(); wb.creator='מפלס'; wb.views=[{rtl:true}];
+    var HD={type:'pattern',pattern:'solid',fgColor:{argb:'FF1F4E78'}}, ST={type:'pattern',pattern:'solid',fgColor:{argb:'FFDDEBF7'}}, TT={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFF2CC'}}, IN={type:'pattern',pattern:'solid',fgColor:{argb:'FFF7F9FC'}};
+    var F={name:'Arial',size:10}, FB={name:'Arial',size:10,bold:true}, FW={name:'Arial',size:10,bold:true,color:{argb:'FFFFFFFF'}}, FIN={name:'Arial',size:10,color:{argb:'FF0000FF'}};
+    var BD={top:{style:'thin',color:{argb:'FFBFBFBF'}},bottom:{style:'thin',color:{argb:'FFBFBFBF'}},left:{style:'thin',color:{argb:'FFBFBFBF'}},right:{style:'thin',color:{argb:'FFBFBFBF'}}};
+    var NF='#,##0 ₪;-#,##0 ₪;"-"', AF='#,##0';
+    function sheet(name, widths){ var ws=wb.addWorksheet(name,{views:[{rightToLeft:true, state:'frozen', ySplit:4}]}); widths.forEach(function(w,i){ ws.getColumn(i+1).width=w; }); ws.getColumn(1).font=F; return ws; }
+    function head(ws, title, cols){ ws.mergeCells(1,1,1,cols.length); var c=ws.getCell(1,1); c.value=title; c.font={name:'Arial',size:14,bold:true,color:{argb:'FF1F4E78'}};
+      ws.mergeCells(2,1,2,cols.length); ws.getCell(2,1).value='פרויקט: '+(pr.name||'')+'   ·   תאריך: '+new Date().toLocaleDateString('he-IL')+'   ·   הופק ממערכת מפלס'; ws.getCell(2,1).font={name:'Arial',size:9,color:{argb:'FF595959'}};
+      var r=ws.getRow(4); cols.forEach(function(t,i){ var cc=r.getCell(i+1); cc.value=t; cc.font=FW; cc.fill=HD; cc.alignment={horizontal:'center',vertical:'middle',wrapText:true}; cc.border=BD; }); r.height=30; }
+    var dFirst=5, dLast=Math.max(5, 4+z.zones.length*z.disc.length), r;
+    var RNG=function(col){ return "'פירוט אומדנים'!$"+col+"$"+dFirst+":$"+col+"$"+dLast; };
+    /* סיכום לפי מתחם */
+    var wsS=sheet('סיכום אומדנים',[9,40,10,18,14,12,40]); head(wsS,'סיכום אומדנים לפי מתחם',['שלב','מתחם','מ"ר','אומדן כולל (₪)','₪/מ"ר','% מהסה"כ','הערות']);
+    r=5; var zoneRows=[], stageRows=[];
+    z.stages.forEach(function(STG){ var stg=STG.n; var sr=r; var row=wsS.getRow(r); row.getCell(1).value=stg; row.getCell(2).value=stg+' — סה"כ'; r++;
+      var first=r; z.zones.forEach(function(zn){ if(zn.sid!==STG.id) return; var rr=wsS.getRow(r);
+        rr.getCell(1).value=stg; rr.getCell(2).value=zn.name; rr.getCell(3).value=num(zn.area)||null; rr.getCell(4).value={formula:'SUMIFS('+RNG('E')+','+RNG('A')+',A'+r+','+RNG('B')+',B'+r+')'}; rr.getCell(5).value={formula:'IFERROR(D'+r+'/C'+r+',"")'}; rr.getCell(7).value=zn.notes||'';
+        [1,2,3,4,5,6,7].forEach(function(k){ rr.getCell(k).border=BD; rr.getCell(k).font=F; }); rr.getCell(3).numFmt=AF; rr.getCell(4).numFmt=NF; rr.getCell(5).numFmt=NF; rr.getCell(7).alignment={wrapText:true}; zoneRows.push(r); r++; });
+      var last=Math.max(first,r-1); row.getCell(3).value={formula:'SUM(C'+first+':C'+last+')'}; row.getCell(4).value={formula:'SUM(D'+first+':D'+last+')'}; row.getCell(5).value={formula:'IFERROR(D'+sr+'/C'+sr+',"")'};
+      [1,2,3,4,5,6,7].forEach(function(k){ var cc=row.getCell(k); cc.fill=ST; cc.font=FB; cc.border=BD; }); row.getCell(3).numFmt=AF; row.getCell(4).numFmt=NF; row.getCell(5).numFmt=NF; stageRows.push(sr); });
+    var totR=r; var trs=wsS.getRow(r); trs.getCell(2).value='סה"כ אומדן עבודות'; trs.getCell(3).value=stageRows.length?{formula:stageRows.map(function(x){return 'C'+x;}).join('+')}:0; trs.getCell(4).value=stageRows.length?{formula:stageRows.map(function(x){return 'D'+x;}).join('+')}:0; trs.getCell(5).value={formula:'IFERROR(D'+r+'/C'+r+',"")'};
+    [1,2,3,4,5,6,7].forEach(function(k){ var cc=trs.getCell(k); cc.fill=TT; cc.font=FB; cc.border=BD; }); trs.getCell(3).numFmt=AF; trs.getCell(4).numFmt=NF; trs.getCell(5).numFmt=NF;
+    zoneRows.concat(stageRows).forEach(function(x){ wsS.getCell('F'+x).value={formula:'IFERROR(D'+x+'/$D$'+totR+',0)'}; wsS.getCell('F'+x).numFmt='0.0%'; });
+    r+=2; var addFirst=r;
+    ADDS.forEach(function(a){ var rr=wsS.getRow(r); rr.getCell(2).value=a.l; rr.getCell(3).value=num(m.adds[a.k]); rr.getCell(3).font=FIN; rr.getCell(3).numFmt=a.t==='pct'?'0.0"%"':'#,##0 "₪/מ\\"ר"';
+      rr.getCell(4).value={formula: a.t==='pct' ? 'D'+totR+'*C'+r+'/100' : 'C'+totR+'*C'+r}; rr.getCell(4).numFmt=NF; [2,3,4].forEach(function(k){ rr.getCell(k).border=BD; if(k!==3) rr.getCell(k).font=F; }); r++; });
+    var exR=r; wsS.getCell('B'+r).value='סך הכל ללא מע"מ'; wsS.getCell('D'+r).value={formula:'D'+totR+'+SUM(D'+addFirst+':D'+(r-1)+')'}; r++;
+    var vR=r; wsS.getCell('B'+r).value='מע"מ'; wsS.getCell('C'+r).value=num(m.vat); wsS.getCell('C'+r).font=FIN; wsS.getCell('C'+r).numFmt='0"%"'; wsS.getCell('D'+r).value={formula:'D'+exR+'*C'+r+'/100'}; r++;
+    wsS.getCell('B'+r).value='סך כל האומדן כולל מע"מ'; wsS.getCell('D'+r).value={formula:'D'+exR+'+D'+vR};
+    [exR,vR,r].forEach(function(x){ ['B','C','D'].forEach(function(cl){ var cc=wsS.getCell(cl+x); cc.border=BD; cc.fill=(x===r?TT:undefined)||cc.fill; if(!cc.font||!cc.font.color) cc.font=(x===vR?F:FB); }); wsS.getCell('D'+x).numFmt=NF; });
+    /* סיכום לפי מקצוע */
+    var wsP=sheet('סיכום לפי מקצוע',[28,18,12]); head(wsP,'סיכום לפי מקצוע',['מקצוע','אומדן (₪)','% מהסה"כ']);
+    r=5; var pf=5; z.disc.forEach(function(d){ var rr=wsP.getRow(r); rr.getCell(1).value=d.n; rr.getCell(2).value={formula:'SUMIFS('+RNG('E')+','+RNG('D')+',A'+r+')'}; [1,2,3].forEach(function(k){ rr.getCell(k).border=BD; rr.getCell(k).font=F; }); rr.getCell(2).numFmt=NF; r++; });
+    var pl=r-1, pt=r; wsP.getCell('A'+r).value='סה"כ'; wsP.getCell('B'+r).value={formula:'SUM(B'+pf+':B'+pl+')'}; ['A','B','C'].forEach(function(cl){ var cc=wsP.getCell(cl+r); cc.fill=TT; cc.font=FB; cc.border=BD; }); wsP.getCell('B'+r).numFmt=NF;
+    for(var q=pf;q<=pt;q++){ wsP.getCell('C'+q).value={formula:'IFERROR(B'+q+'/$B$'+pt+',0)'}; wsP.getCell('C'+q).numFmt='0.0%'; }
+    /* מטריצה */
+    var cols=['שלב','מתחם','מ"ר'].concat(z.disc.map(function(d){return d.n;})).concat(['סה"כ','₪/מ"ר']);
+    var wsM=sheet('מטריצה',[9,34,10].concat(z.disc.map(function(){return 15;})).concat([16,12])); head(wsM,'מטריצת אומדן — מתחם × מקצוע',cols);
+    var colL=function(i){ var s=''; i++; while(i>0){ var mm=(i-1)%26; s=String.fromCharCode(65+mm)+s; i=Math.floor((i-1)/26); } return s; };
+    r=5; var mf=5; z.zones.forEach(function(zn){ var rr=wsM.getRow(r); rr.getCell(1).value=stageOf(z,zn).n; rr.getCell(2).value=zn.name; rr.getCell(3).value=num(zn.area)||null;
+      z.disc.forEach(function(d,j){ var cl=4+j; rr.getCell(cl).value={formula:'SUMIFS('+RNG('E')+','+RNG('A')+',$A'+r+','+RNG('B')+',$B'+r+','+RNG('D')+','+colL(cl-1)+'$4)'}; rr.getCell(cl).numFmt=NF; });
+      var tc=4+z.disc.length; rr.getCell(tc).value={formula:'SUM('+colL(3)+r+':'+colL(tc-2)+r+')'}; rr.getCell(tc).numFmt=NF; rr.getCell(tc).font=FB; rr.getCell(tc+1).value={formula:'IFERROR('+colL(tc-1)+r+'/C'+r+',"")'}; rr.getCell(tc+1).numFmt=NF;
+      for(var k=1;k<=tc+1;k++){ rr.getCell(k).border=BD; if(k!==tc) rr.getCell(k).font=F; } rr.getCell(3).numFmt=AF; r++; });
+    var ml=Math.max(mf,r-1), mr=wsM.getRow(r); mr.getCell(2).value='סה"כ'; mr.getCell(3).value={formula:'SUM(C'+mf+':C'+ml+')'}; mr.getCell(3).numFmt=AF;
+    for(var k2=4;k2<=5+z.disc.length;k2++){ var L=colL(k2-1); mr.getCell(k2).value= k2===5+z.disc.length ? {formula:'IFERROR('+colL(k2-2)+r+'/C'+r+',"")'} : {formula:'SUM('+L+mf+':'+L+ml+')'}; mr.getCell(k2).numFmt=NF; }
+    for(var k3=1;k3<=5+z.disc.length;k3++){ var cc=mr.getCell(k3); cc.fill=TT; cc.font=FB; cc.border=BD; }
+    /* פירוט — מקור הנתונים (תאים כחולים = קלט) */
+    var wsD=sheet('פירוט אומדנים',[9,38,10,22,16,14,30,34]); head(wsD,'פירוט אומדנים — מתחם × מקצוע',['שלב','מתחם','מ"ר','מקצוע','אומדן (₪)','₪/מ"ר','בסיס האומדן','הערות']);
+    r=5;
+    z.zones.forEach(function(zn){ z.disc.forEach(function(d){ var c=z.cells[zn.id+'|'+d.id]||{}; var row=wsD.getRow(r);
+      row.values=[stageOf(z,zn).n, zn.name, num(zn.area)||null, d.n, null, null, c.na?'לא רלוונטי':(c.basis||''), c.note||''];
+      if(c.na) row.getCell(5).value=0; else if(c.mode==='items'){ row.getCell(5).value={formula:"SUMIFS('פירוט סעיפים'!$H:$H,'פירוט סעיפים'!$A:$A,A"+r+",'פירוט סעיפים'!$B:$B,B"+r+",'פירוט סעיפים'!$C:$C,D"+r+")"}; row.getCell(7).value=(c.basis?c.basis+' · ':'')+'לפי פירוט סעיפים'; } else if(c.mode==='rate'){ row.getCell(6).value=num(c.rate); row.getCell(6).font=FIN; row.getCell(5).value={formula:'IFERROR(F'+r+'*C'+r+',0)'}; } else { row.getCell(5).value=num(c.amt)||0; row.getCell(5).font=FIN; }
+      [1,2,3,4,5,6,7,8].forEach(function(k){ var cc=row.getCell(k); cc.border=BD; if(!cc.font||!cc.font.color) cc.font=F; }); row.getCell(3).numFmt=AF; row.getCell(5).numFmt=NF; row.getCell(6).numFmt=NF; row.getCell(8).alignment={wrapText:true,vertical:'top'}; r++; }); });
+    var tr=wsD.getRow(r); tr.getCell(4).value='סה"כ'; tr.getCell(5).value={formula:'SUM(E'+dFirst+':E'+dLast+')'}; [4,5].forEach(function(k){ tr.getCell(k).font=FB; tr.getCell(k).fill=TT; tr.getCell(k).border=BD; }); tr.getCell(5).numFmt=NF;
+    wsD.getCell('J4').value='מקרא'; wsD.getCell('J4').font=FB; wsD.getCell('J5').value='טקסט כחול = נתון קלט (ניתן לעריכה)'; wsD.getCell('J5').font=FIN; wsD.getCell('J6').value='"אומדן" במצב ₪/מ"ר מחושב = מ"ר × ₪/מ"ר'; wsD.getCell('J6').font=F; wsD.getColumn(10).width=34;
+    wsD.autoFilter={from:'A4',to:'H4'};
+    /* פירוט סעיפים */
+    var wsI=sheet('פירוט סעיפים',[9,32,20,34,10,8,14,16]); head(wsI,'פירוט סעיפים — כמות × מחיר יחידה',['שלב','מתחם','מקצוע','סעיף','כמות','יח׳','מחיר יח׳ (₪)','סה"כ (₪)']);
+    r=5; var iFirst=5;
+    z.zones.forEach(function(zn){ z.disc.forEach(function(d){ var c=z.cells[zn.id+'|'+d.id]; if(!c||c.na||c.mode!=='items') return; (c.items||[]).forEach(function(it){ var row=wsI.getRow(r);
+      row.values=[stageOf(z,zn).n, zn.name, d.n, it.d||'', it.q===''?null:num(it.q), it.u||'', it.p===''?null:num(it.p), null];
+      row.getCell(8).value={formula:'IFERROR(E'+r+'*G'+r+',0)'}; [5,7].forEach(function(k){ row.getCell(k).font=FIN; });
+      for(var k=1;k<=8;k++){ row.getCell(k).border=BD; if(k!==5&&k!==7) row.getCell(k).font=F; } row.getCell(5).numFmt='#,##0.##'; row.getCell(7).numFmt=NF; row.getCell(8).numFmt=NF; r++; }); }); });
+    var iLast=Math.max(iFirst,r-1), ir=wsI.getRow(r); ir.getCell(4).value='סה"כ'; ir.getCell(8).value={formula:'SUM(H'+iFirst+':H'+iLast+')'}; [4,5,6,7,8].forEach(function(k){ ir.getCell(k).fill=TT; ir.getCell(k).font=FB; ir.getCell(k).border=BD; }); ir.getCell(8).numFmt=NF;
+    wsI.autoFilter={from:'A4',to:'H4'};
+    wb.worksheets.forEach(function(w){ w.pageSetup={orientation:w.name==='מטריצה'?'landscape':'portrait', fitToPage:true, fitToWidth:1, fitToHeight:0, paperSize:9}; });
+    wb.xlsx.writeBuffer().then(function(buf){ var bl=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}); var a=document.createElement('a'); a.href=URL.createObjectURL(bl); a.download='אומדן_'+(pr.name||'פרויקט').replace(/[\\/:*?"<>|]/g,'_')+'.xlsx'; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },3000); if(window.showToast) showToast('✅ קובץ ה-Excel הופק'); });
+  }
+  /* ── ייבוא מהתבנית שלך ── */
+  function importXlsx(inp){ var f=inp.files&&inp.files[0]; if(!f) return; if(!window.XLSX){ if(window.showToast) showToast('⚠️ רכיב Excel לא זמין'); return; }
+    var rd=new FileReader(); rd.onload=function(e){ try{ var wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'}); var sh=wb.Sheets['פירוט אומדנים']||wb.Sheets[wb.SheetNames.filter(function(n){return /פירוט/.test(n);})[0]];
+      if(!sh){ alert('לא נמצא גליון "פירוט אומדנים" בקובץ'); return; }
+      var rows=XLSX.utils.sheet_to_json(sh,{header:1,defval:''}), hi=rows.findIndex(function(r){ return r.indexOf('מתחם')>=0 && r.join('|').indexOf('מקצוע')>=0; }); if(hi<0){ alert('לא נמצאה שורת כותרות (שלב · מתחם · מקצוע)'); return; }
+      var H=rows[hi].map(String), ix=function(re){ return H.findIndex(function(x){ return re.test(x); }); };
+      var cS=ix(/^שלב/), cZ=ix(/^מתחם/), cA=ix(/מ"ר|מ״ר/), cD=ix(/^מקצוע/), cV=ix(/^אומדן/), cB=ix(/בסיס/), cN=ix(/הערות/);
+      var sum=wb.Sheets['סיכום אומדנים']; var notesByZone={}; if(sum){ XLSX.utils.sheet_to_json(sum,{header:1,defval:''}).forEach(function(r){ if(r[1]) notesByZone[String(r[1])]={area:r[2], note:r[4]}; }); }
+      var z={stages:[],disc:[],zones:[],cells:{}}, dmap={}, zmap={}, smap={};
+      rows.slice(hi+1).forEach(function(r){ var zn=String(r[cZ]||'').trim(), dn=String(r[cD]||'').trim(); if(!zn||!dn||/סה"כ/.test(zn)) return;
+        if(!dmap[dn]){ dmap[dn]={id:uid(),n:dn}; z.disc.push(dmap[dn]); }
+        var sn=String(r[cS]||'').trim()||'כללי'; if(!smap[sn]){ smap[sn]={id:uid(),n:sn}; z.stages.push(smap[sn]); }
+        var key=sn+'|'+zn; if(!zmap[key]){ var ns=notesByZone[zn]||{}; zmap[key]={id:uid(),sid:smap[sn].id,name:zn,area:num(r[cA])||num(ns.area)||'',notes:String(ns.note||'')}; z.zones.push(zmap[key]); }
+        var c={}; if(cV>=0&&num(r[cV])) c.amt=num(r[cV]); if(cB>=0&&r[cB]) c.basis=String(r[cB]); if(cN>=0&&r[cN]&&String(r[cN])!==zmap[key].notes) c.note=String(r[cN]); if(Object.keys(c).length) z.cells[zmap[key].id+'|'+dmap[dn].id]=c; });
+      if(!z.zones.length){ alert('לא נמצאו שורות בקובץ'); return; }
+      if(Z().zones.length && !confirm('לייבא '+z.zones.length+' מתחמים ו-'+z.disc.length+' מקצועות? האומדן הקיים במצב זה יוחלף (אפשר לבטל עם ↶).')) return;
+      snap(); C().state.model.z=z; save(); rer(); if(window.showToast) showToast('✅ יובאו '+z.zones.length+' מתחמים · '+z.disc.length+' מקצועות');
+    }catch(err){ alert('שגיאה בקריאת הקובץ: '+err.message); } }; rd.readAsArrayBuffer(f); inp.value=''; }
+
+  if(!window.__estZEnter){ window.__estZEnter=1; document.addEventListener('keydown', function(e){ var t=e.target; if(e.key!=='Enter'||!t||t.tagName!=='INPUT'||!t.closest||!t.closest('#estbPanel')) return; e.preventDefault();
+    var all=Array.prototype.filter.call(document.querySelectorAll('#estbPanel input:not([type=file]):not([type=checkbox])'), function(x){ return x.offsetParent!==null; }), i=all.indexOf(t); if(i>=0 && all[i+1]) all[i+1].focus(); else t.blur(); }); }
+  window.__estZ={modeBar:modeBar, render:render, exportXlsx:exportXlsx, importXlsx:importXlsx, totals:totals,
+    start:function(k){ mut(function(z){ var st={id:uid(),n:"שלב א'"}; z.stages=[st]; z.disc=(PRESETS[k]||[]).map(function(n){return {id:uid(),n:n};}); z.zones=[{id:uid(),sid:st.id,name:'',area:'',notes:''}]; z.cells={}; }, true); },
+    undo:function(){ if(!UNDO.length) return; C().state.model.z=JSON.parse(UNDO.pop()); save(); rer(); if(window.showToast) showToast('↶ הפעולה בוטלה'); },
+    discName:function(i,v){ mut(function(z){ if(z.disc[i]&&v.trim()) z.disc[i].n=v.trim(); }); },
+    discDel:function(i){ var z=Z(), d=z.disc[i]; mut(function(z){ z.disc.splice(i,1); Object.keys(z.cells).forEach(function(k){ if(k.split('|')[1]===d.id) delete z.cells[k]; }); }, true); toastUndo('המקצוע "'+d.n+'" נמחק'); },
+    discAdd:function(){ UI.picker=true; rer(); },
+    picker:function(on){ UI.picker=!!on; rer(); },
+    view:function(v){ UI.view=v; rer(); },
+    filt:function(k,v){ UI.f=UI.f||{}; UI.f[k]=v; rer(); },
+    discToggle:function(n,on){ var z=Z(); if(on){ if(!z.disc.some(function(d){return d.n===n;})) mut(function(z){ z.disc.push({id:uid(),n:n}); }, true); }
+      else { var i=-1; z.disc.forEach(function(d,j){ if(d.n===n) i=j; }); if(i>=0) window.__estZ.discDel(i); } },
+    discCustom:function(){ var el=document.getElementById('ezNewDisc'), n=el?el.value.trim():''; if(!n) return; if(Z().disc.some(function(d){return d.n===n;})){ if(window.showToast) showToast('המקצוע כבר קיים'); return; } mut(function(z){ z.disc.push({id:uid(),n:n}); }, true); },
+    dmode:function(k,m){ if(m==='items') return window.__estZ.toItems(k); mut(function(z){ var c=z.cells[k]||(z.cells[k]={}); c.mode=m; c.open=true; if(m==='sum' && !num(c.amt) && c.items && c.items.length) c.amt=itemsSum(c); }, true); },
+    dset:function(k,f,v){ mut(function(z){ var c=z.cells[k]||(z.cells[k]={}); c[f]=(f==='rate')?num(v):v; }); },
+    dclear:function(k){ mut(function(z){ delete z.cells[k]; }, true); toastUndo('המקצוע הוסר מהמתחם'); },
+    dadd:function(zid,did){ if(!did) return; if(did==='__new'){ UI.picker=true; rer(); return; } mut(function(z){ var k=zid+'|'+did, c=z.cells[k]||(z.cells[k]={}); c.open=true; c.na=false; if(!c.mode) c.mode='sum'; }, true); setTimeout(function(){ var el=document.querySelector('#estbPanel [data-fid="a'+zid+'|'+did+'"]'); if(el) el.focus(); },30); },
+    toItems:function(k){ mut(function(z){ var c=z.cells[k]||(z.cells[k]={}); c.na=false; if(c.mode!=='items'){ c.items=c.items||[]; if(!c.items.length && num(c.amt)) c.items.push({d:'סכום כולל (מהאומדן הקודם)',q:1,u:'קומפ׳',p:num(c.amt)}); c.mode='items'; } c.open=true; }, true); },
+    iadd:function(k,d,u){ mut(function(z){ var c=z.cells[k]||(z.cells[k]={}); c.mode='items'; c.items=c.items||[]; c.items.push({d:d||'',q:'',u:u||'יח׳',p:''}); }); setTimeout(function(){ var c=Z().cells[k], n=(c&&c.items?c.items.length:1)-1, el=document.querySelector('#estbPanel [data-fid="'+(d?'iq':'id')+k+n+'"]'); if(el){ el.focus(); return; } var ins=document.querySelectorAll('.ezit tbody tr:last-child input'); if(ins.length) ins[d?1:0].focus(); },60); },
+    iset:function(k,i,f,v){ mut(function(z){ var c=z.cells[k]; if(!c||!c.items||!c.items[i]) return; c.items[i][f]=(f==='q'||f==='p')?(String(v).trim()===''?'':num(v)):v; }); },
+    idel:function(k,i){ mut(function(z){ var c=z.cells[k]; if(c&&c.items) c.items.splice(i,1); }, true); },
+    discMove:function(i,d){ mut(function(z){ var j=i+d; if(j<0||j>=z.disc.length) return; var t=z.disc[i]; z.disc[i]=z.disc[j]; z.disc[j]=t; }); },
+    preset:function(k){ if(!PRESETS[k]) return; mut(function(z){ PRESETS[k].forEach(function(n){ if(!z.disc.some(function(d){return d.n===n;})) z.disc.push({id:uid(),n:n}); }); }, true); },
+    stageAdd:function(){ mut(function(z){ var heb="אבגדהוזחטיכלמנסעפצקרשת", st={id:uid(),n:"שלב "+(heb[z.stages.length]||z.stages.length+1)+"'"}; z.stages.push(st); z.zones.push({id:uid(),sid:st.id,name:'',area:'',notes:''}); }, true); },
+    stageName:function(i,v){ mut(function(z){ if(z.stages[i]&&v.trim()) z.stages[i].n=v.trim(); }); },
+    stageToggle:function(i){ mut(function(z){ z.stages[i].c=!z.stages[i].c; }); },
+    stageMove:function(i,d){ mut(function(z){ var j=i+d; if(j<0||j>=z.stages.length) return; var t=z.stages[i]; z.stages[i]=z.stages[j]; z.stages[j]=t; }); },
+    stageDel:function(i){ var z=Z(), st=z.stages[i], n=z.zones.filter(function(x){return x.sid===st.id;}).length; if(n && !confirm('למחוק את "'+st.n+'" ואת '+n+' המתחמים שבו?')) return;
+      mut(function(z){ var ids=z.zones.filter(function(x){return x.sid===st.id;}).map(function(x){return x.id;}); z.zones=z.zones.filter(function(x){return x.sid!==st.id;}); Object.keys(z.cells).forEach(function(k){ if(ids.indexOf(k.split('|')[0])>=0) delete z.cells[k]; }); z.stages.splice(i,1); }, true); toastUndo('"'+st.n+'" נמחק'); },
+    zadd:function(sid){ mut(function(z){ var idx=-1; z.zones.forEach(function(x,j){ if(x.sid===sid) idx=j; }); var n={id:uid(),sid:sid,name:'',area:'',notes:''}; if(idx<0) z.zones.push(n); else z.zones.splice(idx+1,0,n); z.stages.forEach(function(s){ if(s.id===sid) s.c=false; }); }, true);
+      setTimeout(function(){ var ins=document.querySelectorAll('#estbPanel input.zn'); for(var i=0;i<ins.length;i++){ if(!ins[i].value){ ins[i].focus(); break; } } }, 90); },
+    zset:function(i,k,v){ mut(function(z){ if(z.zones[i]) z.zones[i][k]=(k==='area'?num(v)||'':v); }); },
+    zdel:function(i){ var z=Z(), zn=z.zones[i]; mut(function(z){ Object.keys(z.cells).forEach(function(k){ if(k.indexOf(zn.id+'|')===0) delete z.cells[k]; }); z.zones.splice(i,1); }, true); toastUndo('המתחם "'+(zn.name||'ללא שם')+'" נמחק'); },
+    zdup:function(i){ mut(function(z){ var o=z.zones[i], n={id:uid(),sid:o.sid,name:(o.name||'מתחם')+' (עותק)',area:o.area,notes:o.notes}; Object.keys(z.cells).forEach(function(k){ if(k.indexOf(o.id+'|')===0) z.cells[n.id+k.slice(o.id.length)]=JSON.parse(JSON.stringify(z.cells[k])); }); z.zones.splice(i+1,0,n); }, true); },
+    cset:function(k,v){ mut(function(z){ var c=z.cells[k]||(z.cells[k]={}); c.amt=num(v); if(c.mode==='rate') c.mode='sum'; }); },
+    open:function(k){ UI.cell=k; rer(); }, close:function(){ UI.cell=null; rer(); },
+    cfield:function(f,v){ mut(function(z){ var c=z.cells[UI.cell]||(z.cells[UI.cell]={}); if(f==='amt'||f==='rate') v=num(v); c[f]=v; }); },
+    cclear:function(){ var k=UI.cell; UI.cell=null; mut(function(z){ delete z.cells[k]; }, true); },
+    add:function(k,v){ C().state.model.adds[k]=num(v); save(); rer(); },
+    vat:function(v){ C().state.model.vat=num(v); save(); rer(); },
+    clear:function(){ if(!confirm('להתחיל את האומדן לפי מתחמים מחדש? (אומדן המ"ר לא נפגע · אפשר לבטל עם ↶)')) return; snap(); C().state.model.z=null; save(); rer(); }
+  };
 })();
 
 </script>
